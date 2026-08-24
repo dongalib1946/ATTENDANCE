@@ -122,7 +122,7 @@ function getQrPayload_(params) {
   return {
     ok: true,
     token: token,
-    scanUrl: siteUrl + "/?token=" + encodeURIComponent(token),
+    scanUrl: siteUrl + "/?token=" + encodeURIComponent(token) + "&v=" + encodeURIComponent(getPageVersion_(slot)),
     slotLabel: slot.slotLabel,
     nextChangeAt: slot.nextChangeLabel,
     intervalMinutes: settings.qrIntervalMinutes,
@@ -260,6 +260,10 @@ function getSiteUrl_(params) {
     throw new Error("ATTENDANCE_SITE_URL 스크립트 속성 또는 siteUrl 요청 값이 필요합니다.");
   }
   return siteUrl;
+}
+
+function getPageVersion_(slot) {
+  return slot.dateKey + "." + slot.slotIndex;
 }
 
 function logAttendance_(params) {

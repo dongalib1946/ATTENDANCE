@@ -43,6 +43,7 @@
     try {
       response = await fetch(endpoint, {
         method: "POST",
+        cache: "no-store",
         headers: {
           "Content-Type": "application/json"
         },

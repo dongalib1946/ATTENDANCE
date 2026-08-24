@@ -190,7 +190,7 @@ function getQrPayload(event, settings) {
   const slot = getCurrentSlot(settings);
   const token = createToken(slot.dateKey, slot.slotIndex, slot.tokenScope);
   const appUrl = getSiteUrl(event);
-  const scanUrl = `${appUrl}/?token=${encodeURIComponent(token)}`;
+  const scanUrl = `${appUrl}/?token=${encodeURIComponent(token)}&v=${encodeURIComponent(getPageVersion(slot))}`;
 
   return {
     ok: true,
@@ -202,6 +202,10 @@ function getQrPayload(event, settings) {
     refreshTimes: settings.qrRefreshTimes,
     serverTime: slot.serverTime
   };
+}
+
+function getPageVersion(slot) {
+  return `${slot.dateKey}.${slot.slotIndex}`;
 }
 
 async function callAppsScript(params, options = {}) {
