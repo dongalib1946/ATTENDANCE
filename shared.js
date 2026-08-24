@@ -17,8 +17,12 @@
 
     for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
-        if (getAppsScriptUrl()) {
+        const appsScriptUrl = getAppsScriptUrl();
+        if (appsScriptUrl) {
           return await sendJsonp(action, params, requestOptions.timeoutMs);
+        }
+        if (isGitHubPages()) {
+          throw new Error("GitHub Pages에서 사용하려면 config.js에 Apps Script 웹 앱 URL을 입력해 주세요.");
         }
         return await sendFetch(action, params, requestOptions.timeoutMs);
       } catch (error) {
@@ -130,6 +134,10 @@
     const url = String(config.appsScriptUrl || "").trim();
     if (!url || url.includes("PASTE_YOUR_APPS_SCRIPT_URL_HERE")) return "";
     return url;
+  }
+
+  function isGitHubPages() {
+    return window.location.hostname.endsWith("github.io");
   }
 
   function getSiteBaseUrl() {
