@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>근로학생 출퇴근 기록</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel attendance-panel">
+      <div class="loading-layer" id="loadingLayer" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <strong id="loadingText">처리 중입니다</strong>
+      </div>
+
+      <div class="brand-row">
+        <div>
+          <p class="eyebrow">근로학생</p>
+          <h1>출퇴근 기록</h1>
+        </div>
+        <div class="status-dot" id="connectionStatus" title="연결 상태"></div>
+      </div>
+
+      <div class="notice" id="tokenNotice">
+        QR 코드를 확인하고 있습니다.
+      </div>
+
+      <fieldset class="floor-picker" id="floorPicker" disabled>
+        <legend>근무 위치</legend>
+        <button class="floor-button" type="button" data-floor="4층">4층</button>
+        <button class="floor-button" type="button" data-floor="5층">5층</button>
+      </fieldset>
+
+      <label class="field">
+        <span>이름</span>
+        <select id="studentSelect" disabled>
+          <option value="">명부를 불러오는 중...</option>
+        </select>
+      </label>
+
+      <div class="action-grid" aria-label="출근 또는 퇴근 선택">
+        <button class="action-button in" id="clockInButton" type="button" disabled>
+          <span>출근</span>
+          <strong>Clock in</strong>
+        </button>
+        <button class="action-button out" id="clockOutButton" type="button" disabled>
+          <span>퇴근</span>
+          <strong>Clock out</strong>
+        </button>
+      </div>
+
+      <p class="result" id="resultText" role="status" aria-live="polite"></p>
+      <button class="secondary-button retry-button" id="retryRosterButton" type="button" hidden>명부 다시 불러오기</button>
+    </section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./shared.js"></script>
+  <script>
+    const token = new URLSearchParams(location.search).get("token") || "";
+    const floorPicker = document.getElementById("floorPicker");
+    const floorButtons = Array.from(document.querySelectorAll(".floor-button"));
+    const studentSelect = document.getElementById("studentSelect");
+    const tokenNotice = document.getElementById("tokenNotice");
+    const resultText = document.getElementById("resultText");
+    const clockInButton = document.getElementById("clockInButton");
+    const clockOutButton = document.getElementById("clockOutButton");
+    const connectionStatus = document.getElementById("connectionStatus");
+    const loadingLayer = document.getElementById("loadingLayer");
+    const loadingText = document.getElementById("loadingText");
+    const retryRosterButton = document.getElementById("retryRosterButton");
+    let students = [];
+    let selectedFloor = localStorage.getItem("attendance:lastFloor") || "";
+
+    function setReadyState(isReady) {
+      floorPicker.disabled = !isReady;
+      studentSelect.disabled = !isReady || !selectedFloor;
+      clockInButton.disabled = !isReady || !studentSelect.value;
+      clockOutButton.disabled = !isReady || !studentSelect.value;
+      connectionStatus.classList.toggle("ready", isReady);
+    }
+
+    function setResult(message, type) {
+      resultText.textContent = message;
+      resultText.dataset.type = type || "";
+    }
+
+    function setLoading(isLoading, message) {
+      loadingLayer.hidden = !isLoading;
+      loadingText.textContent = message || "처리 중입니다";
+      document.querySelector(".attendance-panel").setAttribute("aria-busy", String(isLoading));
+    }
+
+    function setRosterRetryVisible(isVisible) {
+      retryRosterButton.hidden = !isVisible;
+    }
+
+    function normalizeStudent(student) {
+      if (typeof student === "string") {
+        return { floor: "미지정", name: student };
+      }
+      return {
+        floor: String(student.floor || "미지정").trim(),
+        name: String(student.name || "").trim()
+      };
+    }
+
+    function renderFloorButtons() {
+      const availableFloors = new Set(students.map((student) => student.floor));
+      floorButtons.forEach((button) => {
+        const isAvailable = availableFloors.has(button.dataset.floor);
+        button.hidden = !isAvailable;
+        button.classList.toggle("selected", button.dataset.floor === selectedFloor);
+      });
+
+      if (!availableFloors.has(selectedFloor)) {
+        selectedFloor = availableFloors.has("4층") ? "4층" : Array.from(availableFloors)[0] || "";
+      }
+
+      floorButtons.forEach((button) => {
+        button.classList.toggle("selected", button.dataset.floor === selectedFloor);
+      });
+    }
+
+    function renderStudentOptions() {
+      const floorStudents = students.filter((student) => student.floor === selectedFloor);
+      studentSelect.innerHTML = '<option value="">이름을 선택하세요</option>';
+
+      floorStudents.forEach((student) => {
+        const option = document.createElement("option");
+        option.value = student.name;
+        option.textContent = student.name;
+        studentSelect.appendChild(option);
+      });
+
+      const savedName = localStorage.getItem("attendance:lastName");
+      if (savedName && floorStudents.some((student) => student.name === savedName)) {
+        studentSelect.value = savedName;
+      }
+
+      setReadyState(true);
+    }
+
+    async function loadRoster() {
+      setRosterRetryVisible(false);
+      setReadyState(false);
+      setLoading(true, "명부를 불러오는 중입니다");
+      if (!token) {
+        setLoading(false);
+        tokenNotice.textContent = "최신 QR 코드로 접속해주세요.";
+        setResult("모니터의 최신 QR 코드를 다시 스캔해 주세요.", "error");
+        return;
+      }
+
+      try {
+        const data = await AttendanceApi.call("roster", { token });
+        if (!data.ok) throw new Error(data.message || "명부를 불러오지 못했습니다.");
+
+        students = (data.students || []).map(normalizeStudent).filter((student) => student.name);
+        renderFloorButtons();
+        renderStudentOptions();
+
+        tokenNotice.textContent = data.stale
+          ? "최근에 불러온 명부를 임시로 사용 중입니다. 기록은 정상 저장됩니다."
+          : "근무 위치와 이름을 선택한 뒤 출근 또는 퇴근을 누르세요.";
+        setResult(data.stale ? data.message : "", data.stale ? "" : "");
+      } catch (error) {
+        tokenNotice.textContent = "명부 연결에 실패했습니다.";
+        studentSelect.innerHTML = '<option value="">명부를 불러오지 못했습니다</option>';
+        setResult(error.message, "error");
+        setReadyState(false);
+        setRosterRetryVisible(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function submitAttendance(kind) {
+      const name = studentSelect.value;
+      if (!selectedFloor) {
+        setResult("근무 위치를 먼저 선택해 주세요.", "error");
+        return;
+      }
+      if (!name) {
+        setResult("이름을 먼저 선택해 주세요.", "error");
+        studentSelect.focus();
+        return;
+      }
+
+      setReadyState(false);
+      setLoading(true, "기록 중입니다");
+      setResult("기록 중입니다...", "");
+
+      try {
+        const data = await AttendanceApi.call("log", { floor: selectedFloor, name, kind, token });
+        if (!data.ok) throw new Error(data.message || "기록에 실패했습니다.");
+
+        localStorage.setItem("attendance:lastFloor", selectedFloor);
+        localStorage.setItem("attendance:lastName", name);
+        setResult(`${selectedFloor} ${name}님의 ${data.kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`, "success");
+        tokenNotice.textContent = "기록 완료. 필요한 경우에만 다시 눌러 주세요.";
+      } catch (error) {
+        setResult(error.message, "error");
+      } finally {
+        setLoading(false);
+        setReadyState(true);
+      }
+    }
+
+    floorButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        selectedFloor = button.dataset.floor;
+        localStorage.setItem("attendance:lastFloor", selectedFloor);
+        renderFloorButtons();
+        renderStudentOptions();
+      });
+    });
+
+    studentSelect.addEventListener("change", () => setReadyState(true));
+    clockInButton.addEventListener("click", () => submitAttendance("in"));
+    clockOutButton.addEventListener("click", () => submitAttendance("out"));
+    retryRosterButton.addEventListener("click", loadRoster);
+    loadRoster();
+  </script>
+</body>
+</html>

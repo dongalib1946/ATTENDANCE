@@ -1,0 +1,9 @@
+[build]
+  publish = "."
+
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "ATTENDANCE_TIMEZONE,ATTENDANCE_QR_GRACE_MINUTES,ATTENDANCE_QR_INTERVAL_MINUTES"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

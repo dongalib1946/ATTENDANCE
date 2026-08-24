@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>근로학생 QR</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="display-body">
+  <a class="admin-corner-link" href="./admin.html" aria-label="관리자 페이지로 이동">관리자</a>
+
+  <main class="display-shell">
+    <section class="display-copy">
+      <p class="eyebrow">근로장학생 출퇴근 시스템</p>
+      <div class="clock-block" aria-label="현재 날짜와 시간">
+        <time class="display-time" id="displayTime">--:--:--</time>
+        <time class="display-date" id="displayDate">----</time>
+      </div>
+      <h1>QR코드를 스캔하세요.</h1>
+      <p class="display-status" id="displayStatus">QR 코드를 준비하고 있습니다.</p>
+    </section>
+
+    <section class="qr-stage" aria-label="현재 출퇴근 QR 코드">
+      <div class="qr-canvas" id="qrCode">
+        <div class="qr-placeholder">
+          <div class="spinner" aria-hidden="true"></div>
+          <span>QR 생성 중</span>
+        </div>
+      </div>
+      <div class="qr-meta">
+        <span id="slotLabel">QR 정보 확인 중</span>
+        <strong id="nextChange">다음 변경 확인 중</strong>
+      </div>
+    </section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="./shared.js"></script>
+  <script>
+    const qrCode = document.getElementById("qrCode");
+    const displayStatus = document.getElementById("displayStatus");
+    const displayTime = document.getElementById("displayTime");
+    const displayDate = document.getElementById("displayDate");
+    const slotLabel = document.getElementById("slotLabel");
+    const nextChange = document.getElementById("nextChange");
+    let lastToken = "";
+    let renderInFlight = false;
+    let retryTimer = null;
+    let qrLibraryPromise = null;
+
+    function updateClock() {
+      const now = new Date();
+      displayTime.textContent = new Intl.DateTimeFormat("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }).format(now);
+      displayDate.textContent = new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "long"
+      }).format(now);
+    }
+
+    function ensureQrLibrary() {
+      if (window.QRCode) return Promise.resolve();
+      if (qrLibraryPromise) return qrLibraryPromise;
+
+      qrLibraryPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        const timeoutId = setTimeout(() => {
+          script.remove();
+          reject(new Error("QR 생성 라이브러리 연결이 지연되고 있습니다."));
+        }, 8000);
+
+        script.src = "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js";
+        script.async = true;
+        script.onload = () => {
+          clearTimeout(timeoutId);
+          if (window.QRCode) {
+            resolve();
+          } else {
+            reject(new Error("QR 생성 라이브러리를 사용할 수 없습니다."));
+          }
+        };
+        script.onerror = () => {
+          clearTimeout(timeoutId);
+          reject(new Error("QR 생성 라이브러리를 불러오지 못했습니다."));
+        };
+        document.head.appendChild(script);
+      }).catch((error) => {
+        qrLibraryPromise = null;
+        throw error;
+      });
+
+      return qrLibraryPromise;
+    }
+
+    function scheduleQrRetry(delayMs) {
+      if (retryTimer) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        renderQr();
+      }, delayMs);
+    }
+
+    async function renderQr() {
+      if (renderInFlight) return;
+      renderInFlight = true;
+
+      try {
+        await ensureQrLibrary();
+        const data = await AttendanceApi.call("qr");
+        if (!data.ok) throw new Error(data.message || "QR을 만들 수 없습니다.");
+
+        if (data.token !== lastToken) {
+          qrCode.innerHTML = "";
+          new window.QRCode(qrCode, {
+            text: data.scanUrl,
+            width: 520,
+            height: 520,
+            colorDark: "#10231f",
+            colorLight: "#ffffff",
+            correctLevel: window.QRCode.CorrectLevel.M
+          });
+          lastToken = data.token;
+        }
+
+        displayStatus.textContent = "스캔 후 근무 위치와 이름을 선택하고 출근 또는 퇴근을 누르세요.";
+        slotLabel.textContent = data.slotLabel;
+        nextChange.textContent = `다음 변경: ${data.nextChangeAt}`;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = null;
+        }
+      } catch (error) {
+        displayStatus.textContent = error.message;
+        slotLabel.textContent = "연결 재시도 중";
+        nextChange.textContent = "잠시 후 자동으로 다시 시도합니다";
+        if (!lastToken) {
+          qrCode.innerHTML = '<div class="qr-placeholder"><span>QR 연결 재시도 중</span></div>';
+        }
+        scheduleQrRetry(5000);
+      } finally {
+        renderInFlight = false;
+      }
+    }
+
+    updateClock();
+    setInterval(updateClock, 1000);
+    renderQr();
+    setInterval(renderQr, 30000);
+  </script>
+</body>
+</html>

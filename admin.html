@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>출퇴근 앱 관리자</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel admin-panel">
+      <div class="brand-row">
+        <div>
+          <p class="eyebrow">관리자</p>
+          <h1>QR 설정</h1>
+        </div>
+        <a class="text-link" href="./display.html">QR 화면으로</a>
+      </div>
+
+      <form class="settings-form" id="pinForm">
+        <label class="field">
+          <span>관리자 PIN</span>
+          <input id="adminPinInput" type="password" autocomplete="off" required>
+        </label>
+        <button class="primary-button" type="submit">관리자 인증</button>
+      </form>
+
+      <div class="admin-content" id="adminContent" hidden>
+        <div class="notice">
+          QR 교체 주기를 바꾸면 다음 QR 발급부터 적용됩니다. 이미 열린 학생 화면은 새 QR을 다시 스캔해야 합니다.
+        </div>
+
+        <label class="field">
+          <span>QR 교체 주기</span>
+          <select id="intervalSelect">
+            <option value="30">30분마다</option>
+            <option value="60">1시간마다</option>
+            <option value="180">3시간마다</option>
+            <option value="360">6시간마다</option>
+          </select>
+        </label>
+
+        <div class="admin-actions">
+          <button class="primary-button" id="saveSettingsButton" type="button">설정 저장</button>
+          <button class="secondary-button" id="refreshButton" type="button">상태 확인</button>
+        </div>
+
+        <dl class="env-list" id="envList"></dl>
+      </div>
+
+      <p class="result" id="statusResult" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./shared.js"></script>
+  <script>
+    const pinForm = document.getElementById("pinForm");
+    const adminPinInput = document.getElementById("adminPinInput");
+    const adminContent = document.getElementById("adminContent");
+    const intervalSelect = document.getElementById("intervalSelect");
+    const saveSettingsButton = document.getElementById("saveSettingsButton");
+    const refreshButton = document.getElementById("refreshButton");
+    const envList = document.getElementById("envList");
+    const statusResult = document.getElementById("statusResult");
+    let adminPin = sessionStorage.getItem("attendance:adminPin") || "";
+
+    const labels = {
+      googleAppsScriptUrl: "GOOGLE_APPS_SCRIPT_URL",
+      proxySecret: "ATTENDANCE_PROXY_SECRET",
+      qrSecret: "ATTENDANCE_QR_SECRET",
+      adminPin: "ATTENDANCE_DISPLAY_PIN",
+      siteUrl: "ATTENDANCE_SITE_URL",
+      timezone: "ATTENDANCE_TIMEZONE",
+      refreshTimes: "ATTENDANCE_QR_REFRESH_TIMES"
+    };
+
+    function setResult(message, type) {
+      statusResult.textContent = message;
+      statusResult.dataset.type = type || "";
+    }
+
+    function renderStatus(configured) {
+      envList.innerHTML = "";
+      Object.entries(labels).forEach(([key, label]) => {
+        const row = document.createElement("div");
+        const term = document.createElement("dt");
+        const description = document.createElement("dd");
+        term.textContent = label;
+        description.textContent = configured[key] ? "설정됨" : "미설정";
+        description.dataset.type = configured[key] ? "success" : "error";
+        if (key === "siteUrl" && !configured[key]) {
+          description.textContent = "선택 항목";
+          description.dataset.type = "";
+        }
+        row.append(term, description);
+        envList.appendChild(row);
+      });
+    }
+
+    async function loadStatus() {
+      setResult("확인 중입니다...", "");
+      try {
+        const data = await AttendanceApi.call("adminStatus", { adminPin });
+        if (!data.ok) throw new Error(data.message || "상태 확인에 실패했습니다.");
+        pinForm.hidden = true;
+        adminContent.hidden = false;
+        intervalSelect.value = String(data.settings.qrIntervalMinutes || 60);
+        renderStatus(data.configured);
+        setResult("관리자 인증이 완료되었습니다.", "success");
+      } catch (error) {
+        pinForm.hidden = false;
+        adminContent.hidden = true;
+        sessionStorage.removeItem("attendance:adminPin");
+        adminPin = "";
+        setResult(error.message, "error");
+        adminPinInput.focus();
+      }
+    }
+
+    async function saveSettings() {
+      setResult("설정을 저장하는 중입니다...", "");
+      try {
+        const data = await AttendanceApi.call("updateSettings", {
+          adminPin,
+          intervalMinutes: intervalSelect.value
+        });
+        if (!data.ok) throw new Error(data.message || "설정 저장에 실패했습니다.");
+        intervalSelect.value = String(data.settings.qrIntervalMinutes);
+        setResult(`QR 교체 주기를 ${intervalSelect.options[intervalSelect.selectedIndex].textContent}로 저장했습니다.`, "success");
+      } catch (error) {
+        setResult(error.message, "error");
+      }
+    }
+
+    pinForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      adminPin = adminPinInput.value.trim();
+      sessionStorage.setItem("attendance:adminPin", adminPin);
+      loadStatus();
+    });
+
+    saveSettingsButton.addEventListener("click", saveSettings);
+    refreshButton.addEventListener("click", loadStatus);
+
+    if (adminPin) {
+      adminPinInput.value = adminPin;
+      loadStatus();
+    }
+  </script>
+</body>
+</html>
