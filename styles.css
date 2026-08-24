@@ -433,9 +433,11 @@ select:focus {
 }
 
 .display-copy .eyebrow {
-  margin-bottom: 22px;
+  margin-bottom: 24px;
   color: var(--green-strong);
-  font-size: 17px;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 900;
 }
 
 .clock-block {
