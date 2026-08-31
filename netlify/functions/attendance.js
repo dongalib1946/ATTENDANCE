@@ -6,7 +6,7 @@ const DEFAULT_APPS_SCRIPT_TIMEOUT_MS = 8000;
 const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 const ROSTER_STALE_TTL_MS = 12 * 60 * 60 * 1000;
 const SETTINGS_CACHE_TTL_MS = 60 * 1000;
-const SCHEDULE_CACHE_TTL_MS = 60 * 1000;
+const SCHEDULE_CACHE_TTL_MS = 30 * 1000;
 
 let rosterCache = {
   students: null,
@@ -37,7 +37,7 @@ exports.handler = async function handler(event) {
     }
 
     if (action === "schedule") {
-      return json(await getSchedulePayload());
+      return json(await getSchedulePayload(isForceRefresh(body.refresh)));
     }
 
     if (action === "log") {
@@ -174,13 +174,14 @@ async function getRosterPayload() {
   }
 }
 
-async function getSchedulePayload() {
+async function getSchedulePayload(forceRefresh = false) {
   const now = Date.now();
-  if (scheduleCache.payload && now < scheduleCache.expiresAt) {
+  if (!forceRefresh && scheduleCache.payload && now < scheduleCache.expiresAt) {
     return Object.assign({}, scheduleCache.payload, { cached: true });
   }
 
-  const result = await callAppsScript({ action: "schedule" }, { timeoutMs: getAppsScriptTimeoutMs(), retries: 1 });
+  const params = forceRefresh ? { action: "schedule", refresh: "1" } : { action: "schedule" };
+  const result = await callAppsScript(params, { timeoutMs: getAppsScriptTimeoutMs(), retries: 1 });
   if (!result.ok) throw new Error(result.message || "시간표를 불러오지 못했습니다.");
 
   const payload = {
@@ -200,6 +201,11 @@ function normalizeInterval(value) {
   const interval = Number(value || DEFAULT_INTERVAL_MINUTES);
   if (ALLOWED_INTERVALS.includes(interval)) return interval;
   return DEFAULT_INTERVAL_MINUTES;
+}
+
+function isForceRefresh(value) {
+  const text = String(value || "").trim().toUpperCase();
+  return text === "1" || text === "Y" || text === "YES" || text === "TRUE";
 }
 
 function normalizeRefreshTimes(value) {

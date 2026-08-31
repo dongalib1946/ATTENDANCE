@@ -18,7 +18,7 @@ const CONFIG = {
   ROSTER_CACHE_KEY: "studentRoster:v1",
   ROSTER_CACHE_SECONDS: 300,
   SCHEDULE_CACHE_KEY: "interloanSchedule:v1",
-  SCHEDULE_CACHE_SECONDS: 60,
+  SCHEDULE_CACHE_SECONDS: 30,
   SCHEDULE_WEEKDAYS: ["월", "화", "수", "목", "금"],
   SCHEDULE_TIME_LABELS: ["1타임", "2타임", "3타임"]
 };
@@ -36,7 +36,7 @@ function doGet(e) {
     if (action === "qr") {
       payload = getQrPayload_(params);
     } else if (action === "schedule") {
-      const schedule = getSchedule_();
+      const schedule = getSchedule_(isForceRefresh_(params.refresh));
       payload = {
         ok: true,
         dayLabel: schedule.dayLabel,
@@ -333,9 +333,9 @@ function getRoster_() {
   return roster;
 }
 
-function getSchedule_() {
+function getSchedule_(forceRefresh) {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get(CONFIG.SCHEDULE_CACHE_KEY);
+  const cached = forceRefresh ? "" : cache.get(CONFIG.SCHEDULE_CACHE_KEY);
   if (cached) {
     try {
       return JSON.parse(cached);
@@ -493,6 +493,11 @@ function clearRosterCache() {
 
 function clearScheduleCache() {
   CacheService.getScriptCache().remove(CONFIG.SCHEDULE_CACHE_KEY);
+}
+
+function isForceRefresh_(value) {
+  const text = String(value || "").trim().toUpperCase();
+  return text === "1" || text === "Y" || text === "YES" || text === "TRUE";
 }
 
 function normalizeInterval_(value) {
