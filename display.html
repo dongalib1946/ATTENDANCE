@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260831-interloan-1">
+  <link rel="stylesheet" href="./styles.css?v=20260831-interloan-2">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260831-interloan-1" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260831-interloan-2" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -33,9 +33,12 @@
           <span>QR 생성 중</span>
         </div>
       </div>
-      <div class="qr-meta">
-        <span id="slotLabel">QR 정보 확인 중</span>
-        <strong id="nextChange">다음 변경 확인 중</strong>
+      <div class="qr-meta connection-panel" id="connectionPanel" data-status="checking">
+        <span class="connection-state">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connectionLabel">연결 확인 중</span>
+        </span>
+        <strong id="connectionChecked">확인 대기</strong>
       </div>
     </section>
 
@@ -44,6 +47,7 @@
         <div>
           <strong>상호대차 담당자</strong>
         </div>
+        <button class="schedule-refresh-button" id="scheduleRefreshButton" type="button" aria-label="상호대차 담당자 새로 불러오기" title="새로 불러오기">↻</button>
         <time id="scheduleUpdated">불러오는 중</time>
       </div>
       <div class="schedule-table-wrap">
@@ -60,21 +64,24 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260831-interloan-1"></script>
+  <script src="./config.js?v=20260831-interloan-2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260831-interloan-1"></script>
+  <script src="./shared.js?v=20260831-interloan-2"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
     const displayTime = document.getElementById("displayTime");
     const displayDate = document.getElementById("displayDate");
-    const slotLabel = document.getElementById("slotLabel");
-    const nextChange = document.getElementById("nextChange");
+    const connectionPanel = document.getElementById("connectionPanel");
+    const connectionLabel = document.getElementById("connectionLabel");
+    const connectionChecked = document.getElementById("connectionChecked");
     const scheduleBody = document.getElementById("scheduleBody");
     const scheduleUpdated = document.getElementById("scheduleUpdated");
+    const scheduleRefreshButton = document.getElementById("scheduleRefreshButton");
     let lastToken = "";
     let renderInFlight = false;
     let scheduleInFlight = false;
+    let scheduleDayKey = getScheduleDayKey();
     let retryTimer = null;
     let qrLibraryPromise = null;
 
@@ -136,6 +143,20 @@
       }, delayMs);
     }
 
+    function formatCurrentTime() {
+      return new Intl.DateTimeFormat("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }).format(new Date());
+    }
+
+    function setConnectionStatus(status, label) {
+      connectionPanel.dataset.status = status;
+      connectionLabel.textContent = label;
+      connectionChecked.textContent = `${formatCurrentTime()} 확인`;
+    }
+
     async function renderQr() {
       if (renderInFlight) return;
       renderInFlight = true;
@@ -159,16 +180,14 @@
         }
 
         displayStatus.textContent = "스캔 후 근무 위치와 이름을 선택하고 출근 또는 퇴근을 누르세요.";
-        slotLabel.textContent = data.slotLabel;
-        nextChange.textContent = `다음 변경: ${data.nextChangeAt}`;
+        setConnectionStatus("ok", "연결 정상");
         if (retryTimer) {
           clearTimeout(retryTimer);
           retryTimer = null;
         }
       } catch (error) {
         displayStatus.textContent = error.message;
-        slotLabel.textContent = "연결 재시도 중";
-        nextChange.textContent = "잠시 후 자동으로 다시 시도합니다";
+        setConnectionStatus("error", "연결 재시도 중");
         if (!lastToken) {
           qrCode.innerHTML = '<div class="qr-placeholder"><span>QR 연결 재시도 중</span></div>';
         }
@@ -184,18 +203,6 @@
         staff: "",
         note: ""
       }));
-    }
-
-    function buildPreviewScheduleSlots() {
-      return [
-        { label: "1타임", staff: "홍길동", note: "" },
-        { label: "2타임", staff: "김학생", note: "" },
-        { label: "3타임", staff: "이근로", note: "" }
-      ];
-    }
-
-    function isLocalPreview() {
-      return ["localhost", "127.0.0.1"].includes(window.location.hostname);
     }
 
     function renderSchedule(slots) {
@@ -218,6 +225,7 @@
     async function loadSchedule() {
       if (scheduleInFlight) return;
       scheduleInFlight = true;
+      scheduleRefreshButton.disabled = true;
 
       try {
         const data = await AttendanceApi.call("schedule");
@@ -226,19 +234,38 @@
         renderSchedule(slots);
         scheduleUpdated.textContent = data.updatedAt ? `${data.updatedAt} 기준` : "방금 갱신";
       } catch (error) {
-        renderSchedule(isLocalPreview() ? buildPreviewScheduleSlots() : buildDefaultScheduleSlots());
-        scheduleUpdated.textContent = "연결 대기";
+        renderSchedule(buildDefaultScheduleSlots());
+        scheduleUpdated.textContent = "불러오기 실패";
       } finally {
         scheduleInFlight = false;
+        scheduleRefreshButton.disabled = false;
       }
+    }
+
+    function getScheduleDayKey() {
+      return new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(new Date());
+    }
+
+    function refreshScheduleOnDayChange() {
+      const nextDayKey = getScheduleDayKey();
+      if (nextDayKey === scheduleDayKey) return;
+      scheduleDayKey = nextDayKey;
+      loadSchedule();
     }
 
     updateClock();
     setInterval(updateClock, 1000);
     renderQr();
     loadSchedule();
+    scheduleRefreshButton.addEventListener("click", loadSchedule);
     setInterval(renderQr, 30000);
-    setInterval(loadSchedule, 300000);
+    setInterval(loadSchedule, 60 * 60 * 1000);
+    setInterval(refreshScheduleOnDayChange, 60 * 1000);
   </script>
 </body>
 </html>

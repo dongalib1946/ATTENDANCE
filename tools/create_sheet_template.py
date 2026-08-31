@@ -98,7 +98,7 @@ def build_workbook():
 
     schedule.append(["요일", "1타임", "2타임", "3타임", "비고", "사용여부"])
     schedule_rows = [
-        ["월", "홍길동", "김학생", "이근로", "예시 행입니다. 실제 상호대차 학생명으로 바꿔 주세요.", "Y"],
+        ["월", "", "", "", "", "Y"],
         ["화", "", "", "", "", "Y"],
         ["수", "", "", "", "", "Y"],
         ["목", "", "", "", "", "Y"],
@@ -176,7 +176,7 @@ def verify(path):
     assert wb["학생명부"]["C6"].value == "N"
     assert wb["시간표"]["A2"].value == "월"
     assert wb["시간표"]["A6"].value == "금"
-    assert wb["시간표"]["B2"].value == "홍길동"
+    assert wb["시간표"]["B2"].value is None
     assert len(wb["학생명부"].data_validations.dataValidation) == 2
     assert len(wb["시간표"].data_validations.dataValidation) == 2
 
