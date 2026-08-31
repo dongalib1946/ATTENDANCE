@@ -448,10 +448,10 @@ select:focus {
   height: 100svh;
   max-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(460px, 0.86fr);
+  grid-template-columns: minmax(330px, 0.78fr) minmax(360px, 0.72fr) minmax(430px, 0.9fr);
   align-items: center;
-  gap: 56px;
-  padding: 42px 58px;
+  gap: 28px;
+  padding: 34px 42px;
 }
 
 .display-copy {
@@ -462,8 +462,8 @@ select:focus {
   position: relative;
   display: grid;
   gap: 10px;
-  margin: 0 0 34px;
-  padding: 22px 26px 24px 28px;
+  margin: 0 0 28px;
+  padding: 20px 24px 22px 26px;
   border-left: 8px solid #8ee7a4;
   border-radius: 0 8px 8px 0;
   background: linear-gradient(90deg, rgba(4, 18, 39, 0.72), rgba(6, 34, 66, 0.38));
@@ -477,7 +477,7 @@ select:focus {
 
 .system-masthead span {
   color: #bde4ff;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.2;
   word-break: keep-all;
@@ -485,7 +485,7 @@ select:focus {
 
 .system-masthead strong {
   color: #ffffff;
-  font-size: 50px;
+  font-size: 42px;
   font-weight: 900;
   line-height: 1.08;
   letter-spacing: 0;
@@ -501,7 +501,7 @@ select:focus {
 .display-time {
   display: block;
   color: #ffffff;
-  font-size: 118px;
+  font-size: 86px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   line-height: 0.92;
@@ -513,7 +513,7 @@ select:focus {
 .display-date {
   display: block;
   color: #cfe8ff;
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.2;
   word-break: keep-all;
@@ -522,9 +522,9 @@ select:focus {
 
 .display-copy h1 {
   max-width: 720px;
-  margin-top: 46px;
+  margin-top: 34px;
   color: #ffffff;
-  font-size: 76px;
+  font-size: 50px;
   line-height: 1.08;
   letter-spacing: 0;
   word-break: keep-all;
@@ -534,9 +534,9 @@ select:focus {
 
 .display-status {
   max-width: 680px;
-  margin: 28px 0 0;
+  margin: 20px 0 0;
   color: #d9eafd;
-  font-size: 26px;
+  font-size: 20px;
   line-height: 1.42;
   word-break: keep-all;
   text-wrap: balance;
@@ -551,8 +551,8 @@ select:focus {
 }
 
 .qr-canvas {
-  width: min(40vw, calc(100vh - 210px), 620px);
-  height: min(40vw, calc(100vh - 210px), 620px);
+  width: min(28vw, calc(100vh - 220px), 500px);
+  height: min(28vw, calc(100vh - 220px), 500px);
   display: grid;
   place-items: center;
   border: 22px solid #ffffff;
@@ -578,7 +578,7 @@ select:focus {
 }
 
 .qr-meta {
-  width: min(40vw, calc(100vh - 210px), 620px);
+  width: min(28vw, calc(100vh - 220px), 500px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
@@ -594,6 +594,111 @@ select:focus {
   backdrop-filter: blur(10px);
 }
 
+.schedule-stage {
+  min-width: 0;
+  align-self: center;
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(10px);
+}
+
+.schedule-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(16, 33, 31, 0.13);
+}
+
+.schedule-heading div {
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-heading strong {
+  color: var(--ink);
+  font-size: 42px;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.schedule-heading time {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.schedule-table-wrap {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.schedule-table th,
+.schedule-table td {
+  height: clamp(86px, 13vh, 132px);
+  padding: 14px 16px;
+  border-bottom: 1px solid #dbe3e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.schedule-table thead th {
+  height: 44px;
+  padding: 9px 12px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.schedule-table th:first-child {
+  width: 35%;
+}
+
+.schedule-table tbody th {
+  color: #29423c;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  text-align: left;
+}
+
+.schedule-table td {
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.schedule-table tbody tr.is-current th,
+.schedule-table tbody tr.is-current td {
+  background: #e8f5f0;
+  color: #023f31;
+}
+
+.schedule-table tbody tr.is-current th {
+  box-shadow: inset 4px 0 0 var(--green);
+}
+
 .qr-meta strong {
   color: var(--ink);
   font-weight: 900;
@@ -602,45 +707,53 @@ select:focus {
 
 @media (min-width: 1800px) {
   .display-shell {
-    gap: 76px;
-    padding: 54px 78px;
+    gap: 34px;
+    padding: 42px 58px;
   }
 
   .system-masthead strong {
-    font-size: 58px;
+    font-size: 48px;
   }
 
   .display-time {
-    font-size: 138px;
+    font-size: 104px;
   }
 
   .display-date {
-    font-size: 34px;
+    font-size: 28px;
   }
 
   .display-copy h1 {
-    font-size: 88px;
+    font-size: 58px;
   }
 
   .display-status {
-    font-size: 29px;
+    font-size: 23px;
   }
 
   .qr-canvas,
   .qr-meta {
-    width: min(39vw, calc(100vh - 226px), 680px);
+    width: min(27vw, calc(100vh - 230px), 560px);
   }
 
   .qr-canvas {
-    height: min(39vw, calc(100vh - 226px), 680px);
+    height: min(27vw, calc(100vh - 230px), 560px);
+  }
+
+  .schedule-table {
+    font-size: 24px;
+  }
+
+  .schedule-table td {
+    font-size: 34px;
   }
 }
 
 @media (max-width: 1280px) {
   .display-shell {
-    grid-template-columns: minmax(360px, 1fr) minmax(400px, 0.82fr);
-    gap: 36px;
-    padding: 34px 42px;
+    grid-template-columns: minmax(300px, 0.76fr) minmax(320px, 0.7fr) minmax(390px, 0.9fr);
+    gap: 20px;
+    padding: 28px 30px;
   }
 
   .system-masthead {
@@ -653,33 +766,55 @@ select:focus {
   }
 
   .system-masthead strong {
-    font-size: 40px;
+    font-size: 34px;
   }
 
   .display-time {
-    font-size: 92px;
+    font-size: 72px;
   }
 
   .display-date {
-    font-size: 25px;
+    font-size: 22px;
   }
 
   .display-copy h1 {
     margin-top: 34px;
-    font-size: 58px;
+    font-size: 42px;
   }
 
   .display-status {
-    font-size: 22px;
+    font-size: 18px;
   }
 
   .qr-canvas,
   .qr-meta {
-    width: min(39vw, calc(100vh - 190px), 520px);
+    width: min(26vw, calc(100vh - 204px), 440px);
   }
 
   .qr-canvas {
-    height: min(39vw, calc(100vh - 190px), 520px);
+    height: min(26vw, calc(100vh - 204px), 440px);
+  }
+
+  .schedule-stage {
+    padding: 14px;
+  }
+
+  .schedule-heading strong {
+    font-size: 34px;
+  }
+
+  .schedule-table {
+    font-size: 19px;
+  }
+
+  .schedule-table td {
+    font-size: 25px;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    height: clamp(76px, 12vh, 110px);
+    padding-inline: 10px;
   }
 }
 
@@ -745,6 +880,24 @@ select:focus {
   .qr-meta {
     grid-template-columns: 1fr;
     font-size: 17px;
+  }
+
+  .schedule-stage {
+    align-self: auto;
+  }
+
+  .schedule-table-wrap {
+    overflow: auto;
+    max-height: 72vh;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    height: 74px;
+  }
+
+  .schedule-table td {
+    font-size: 22px;
   }
 }
 

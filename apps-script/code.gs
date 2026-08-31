@@ -2,6 +2,7 @@ const CONFIG = {
   SPREADSHEET_ID: "1u_1BWwQ_RHhlhDR4osz376vcZQSbl_7tOfMzOFoi6V4",
   ATTENDANCE_SHEET_NAME: "출퇴근기록",
   STUDENT_SHEET_NAME: "학생명부",
+  SCHEDULE_SHEET_NAME: "시간표",
   TIMEZONE: "Asia/Seoul",
   TIMEZONE_PROPERTY: "ATTENDANCE_TIMEZONE",
   PROXY_SECRET_PROPERTY: "ATTENDANCE_PROXY_SECRET",
@@ -15,7 +16,11 @@ const CONFIG = {
   DEFAULT_QR_INTERVAL_MINUTES: 60,
   ALLOWED_QR_INTERVAL_MINUTES: [30, 60, 180, 360],
   ROSTER_CACHE_KEY: "studentRoster:v1",
-  ROSTER_CACHE_SECONDS: 300
+  ROSTER_CACHE_SECONDS: 300,
+  SCHEDULE_CACHE_KEY: "interloanSchedule:v1",
+  SCHEDULE_CACHE_SECONDS: 60,
+  SCHEDULE_WEEKDAYS: ["월", "화", "수", "목", "금"],
+  SCHEDULE_TIME_LABELS: ["1타임", "2타임", "3타임"]
 };
 
 function doGet(e) {
@@ -30,6 +35,15 @@ function doGet(e) {
     let payload;
     if (action === "qr") {
       payload = getQrPayload_(params);
+    } else if (action === "schedule") {
+      const schedule = getSchedule_();
+      payload = {
+        ok: true,
+        dayLabel: schedule.dayLabel,
+        slots: schedule.slots,
+        updatedAt: getNowLabel_(),
+        note: schedule.note
+      };
     } else if (action === "roster") {
       if (!hasProxyAccess) requireValidToken_(params.token);
       payload = { ok: true, students: getRoster_() };
@@ -58,6 +72,7 @@ function setupSpreadsheet() {
   const ss = getSpreadsheet_();
   const attendance = getOrCreateSheet_(ss, CONFIG.ATTENDANCE_SHEET_NAME);
   const students = getOrCreateSheet_(ss, CONFIG.STUDENT_SHEET_NAME);
+  const schedule = getOrCreateSheet_(ss, CONFIG.SCHEDULE_SHEET_NAME);
 
   if (attendance.getLastRow() === 0) {
     attendance.appendRow(["이름", "시간", "구분", "층"]);
@@ -67,6 +82,13 @@ function setupSpreadsheet() {
     students.appendRow(["층", "이름", "사용여부", "비고"]);
     students.appendRow(["4층", "홍길동", "Y", ""]);
     students.appendRow(["5층", "김학생", "Y", ""]);
+  }
+
+  if (schedule.getLastRow() === 0) {
+    schedule.appendRow(["요일", "1타임", "2타임", "3타임", "비고", "사용여부"]);
+    CONFIG.SCHEDULE_WEEKDAYS.forEach(function (weekday) {
+      schedule.appendRow([weekday, "", "", "", "", "Y"]);
+    });
   }
 
   const props = PropertiesService.getScriptProperties();
@@ -311,6 +333,137 @@ function getRoster_() {
   return roster;
 }
 
+function getSchedule_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CONFIG.SCHEDULE_CACHE_KEY);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      cache.remove(CONFIG.SCHEDULE_CACHE_KEY);
+    }
+  }
+
+  const schedule = readSchedule_();
+  cache.put(CONFIG.SCHEDULE_CACHE_KEY, JSON.stringify(schedule), CONFIG.SCHEDULE_CACHE_SECONDS);
+  return schedule;
+}
+
+function readSchedule_() {
+  const ss = getSpreadsheet_();
+  const sheet = getOrCreateSheet_(ss, CONFIG.SCHEDULE_SHEET_NAME);
+  ensureScheduleHeader_(sheet);
+
+  const dayLabel = getTodayWeekday_();
+  const schedule = createDefaultInterloanSchedule_(dayLabel);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2 || CONFIG.SCHEDULE_WEEKDAYS.indexOf(dayLabel) === -1) return schedule;
+
+  const values = sheet.getRange(1, 1, lastRow, Math.max(6, sheet.getLastColumn())).getValues();
+  const headers = values[0].map(function (header) {
+    return normalizeHeader_(header);
+  });
+  const indexes = {
+    weekday: findHeaderIndex_(headers, ["요일", "weekday", "day"]),
+    first: findHeaderIndex_(headers, ["1타임", "1", "first", "time1"]),
+    second: findHeaderIndex_(headers, ["2타임", "2", "second", "time2"]),
+    third: findHeaderIndex_(headers, ["3타임", "3", "third", "time3"]),
+    note: findHeaderIndex_(headers, ["비고", "메모", "note"]),
+    active: findHeaderIndex_(headers, ["사용여부", "사용", "active"])
+  };
+  if (indexes.weekday === -1) return schedule;
+
+  values.slice(1).forEach(function (row) {
+    const rowDay = normalizeWeekday_(row[indexes.weekday]);
+    if (rowDay !== dayLabel) return;
+
+    const active = indexes.active === -1 ? "Y" : String(row[indexes.active] || "Y").trim().toUpperCase();
+    if (!isActive_(active)) {
+      schedule.note = dayLabel + "요일 상호대차 시간표가 비활성화되어 있습니다.";
+      return;
+    }
+
+    schedule.slots[0].staff = normalizeScheduleText_(row[indexes.first]);
+    schedule.slots[1].staff = normalizeScheduleText_(row[indexes.second]);
+    schedule.slots[2].staff = normalizeScheduleText_(row[indexes.third]);
+    schedule.note = indexes.note === -1 || !row[indexes.note]
+      ? dayLabel + "요일 상호대차 담당자입니다."
+      : normalizeScheduleText_(row[indexes.note]);
+  });
+
+  return schedule;
+}
+
+function ensureScheduleHeader_(sheet) {
+  if (sheet.getLastRow() > 0) return;
+  sheet.appendRow(["요일", "1타임", "2타임", "3타임", "비고", "사용여부"]);
+}
+
+function createDefaultInterloanSchedule_(dayLabel) {
+  const isWeekday = CONFIG.SCHEDULE_WEEKDAYS.indexOf(dayLabel) !== -1;
+  return {
+    dayLabel: dayLabel,
+    slots: CONFIG.SCHEDULE_TIME_LABELS.map(function (label) {
+      return {
+        label: label,
+        staff: "",
+        note: ""
+      };
+    }),
+    note: isWeekday
+      ? dayLabel + "요일 상호대차 담당자입니다."
+      : "오늘은 상호대차 근무일이 아닙니다."
+  };
+}
+
+function normalizeHeader_(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function findHeaderIndex_(headers, candidates) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const headerIndex = headers.indexOf(candidates[index]);
+    if (headerIndex !== -1) return headerIndex;
+  }
+  return -1;
+}
+
+function normalizeWeekday_(value) {
+  const text = String(value || "").trim().replace("요일", "");
+  if (!text) return "";
+  const englishWeekdays = {
+    monday: "월",
+    tuesday: "화",
+    wednesday: "수",
+    thursday: "목",
+    friday: "금"
+  };
+  return englishWeekdays[text.toLowerCase()] || text;
+}
+
+function normalizeScheduleText_(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function getNowLabel_() {
+  return Utilities.formatDate(new Date(), getTimezone_(), "HH:mm");
+}
+
+function getTodayWeekday_() {
+  const dateText = Utilities.formatDate(new Date(), getTimezone_(), "yyyy-MM-dd");
+  const parts = dateText.split("-").map(function (part) {
+    return Number(part);
+  });
+  const dayIndex = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+  return ["일", "월", "화", "수", "목", "금", "토"][dayIndex];
+}
+
 function readRoster_() {
   const ss = getSpreadsheet_();
   const sheet = getOrCreateSheet_(ss, CONFIG.STUDENT_SHEET_NAME);
@@ -336,6 +489,10 @@ function readRoster_() {
 
 function clearRosterCache() {
   CacheService.getScriptCache().remove(CONFIG.ROSTER_CACHE_KEY);
+}
+
+function clearScheduleCache() {
+  CacheService.getScriptCache().remove(CONFIG.SCHEDULE_CACHE_KEY);
 }
 
 function normalizeInterval_(value) {

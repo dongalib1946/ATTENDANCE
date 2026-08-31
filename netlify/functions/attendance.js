@@ -6,6 +6,7 @@ const DEFAULT_APPS_SCRIPT_TIMEOUT_MS = 8000;
 const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 const ROSTER_STALE_TTL_MS = 12 * 60 * 60 * 1000;
 const SETTINGS_CACHE_TTL_MS = 60 * 1000;
+const SCHEDULE_CACHE_TTL_MS = 60 * 1000;
 
 let rosterCache = {
   students: null,
@@ -14,6 +15,10 @@ let rosterCache = {
 };
 let settingsCache = {
   settings: null,
+  expiresAt: 0
+};
+let scheduleCache = {
+  payload: null,
   expiresAt: 0
 };
 
@@ -29,6 +34,10 @@ exports.handler = async function handler(event) {
 
     if (action === "roster") {
       return json(await getRosterPayload());
+    }
+
+    if (action === "schedule") {
+      return json(await getSchedulePayload());
     }
 
     if (action === "log") {
@@ -163,6 +172,28 @@ async function getRosterPayload() {
     }
     throw new Error(`명부 연결이 불안정합니다. 잠시 후 다시 시도해 주세요. (${error.message})`);
   }
+}
+
+async function getSchedulePayload() {
+  const now = Date.now();
+  if (scheduleCache.payload && now < scheduleCache.expiresAt) {
+    return Object.assign({}, scheduleCache.payload, { cached: true });
+  }
+
+  const result = await callAppsScript({ action: "schedule" }, { timeoutMs: getAppsScriptTimeoutMs(), retries: 1 });
+  if (!result.ok) throw new Error(result.message || "시간표를 불러오지 못했습니다.");
+
+  const payload = {
+    ok: true,
+    slots: Array.isArray(result.slots) ? result.slots : [],
+    updatedAt: result.updatedAt || "",
+    note: result.note || "구글시트 시간표와 연결되어 있습니다."
+  };
+  scheduleCache = {
+    payload,
+    expiresAt: now + SCHEDULE_CACHE_TTL_MS
+  };
+  return payload;
 }
 
 function normalizeInterval(value) {

@@ -8,7 +8,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "outputs" / "01a01d7b-6591-7ff0-ab17-13f739cca685"
-OUTPUT_PATH = OUTPUT_DIR / "근로학생_출퇴근_구글시트_템플릿_netlify_env.xlsx"
+OUTPUT_PATH = OUTPUT_DIR / "근로학생_출퇴근_상호대차_구글시트_템플릿.xlsx"
 
 
 HEADER_FILL = PatternFill("solid", fgColor="0F766E")
@@ -54,6 +54,7 @@ def build_workbook():
     attendance = wb.active
     attendance.title = "출퇴근기록"
     roster = wb.create_sheet("학생명부")
+    schedule = wb.create_sheet("시간표")
     settings = wb.create_sheet("설정")
 
     attendance.append(["이름", "시간", "구분", "층"])
@@ -95,36 +96,71 @@ def build_workbook():
     floor_validation.add("A2:A205")
     active_validation.add("C2:C205")
 
+    schedule.append(["요일", "1타임", "2타임", "3타임", "비고", "사용여부"])
+    schedule_rows = [
+        ["월", "홍길동", "김학생", "이근로", "예시 행입니다. 실제 상호대차 학생명으로 바꿔 주세요.", "Y"],
+        ["화", "", "", "", "", "Y"],
+        ["수", "", "", "", "", "Y"],
+        ["목", "", "", "", "", "Y"],
+        ["금", "", "", "", "", "Y"],
+    ]
+    for row in schedule_rows:
+        schedule.append(row)
+
+    style_header(schedule[1])
+    style_body(schedule, 2, 6, 6)
+    schedule.freeze_panes = "A2"
+    schedule.column_dimensions["A"].width = 10
+    schedule.column_dimensions["B"].width = 18
+    schedule.column_dimensions["C"].width = 18
+    schedule.column_dimensions["D"].width = 18
+    schedule.column_dimensions["E"].width = 42
+    schedule.column_dimensions["F"].width = 12
+    add_table(schedule, "A1:F6", "InterloanSchedule")
+
+    weekday_validation = DataValidation(type="list", formula1='"월,화,수,목,금"', allow_blank=False)
+    schedule_active_validation = DataValidation(type="list", formula1='"Y,N"', allow_blank=False)
+    schedule.add_data_validation(weekday_validation)
+    schedule.add_data_validation(schedule_active_validation)
+    weekday_validation.add("A2:A6")
+    schedule_active_validation.add("F2:F6")
+
     settings["A1"] = "근로학생 출퇴근 QR 앱 설정 메모"
     settings["A1"].font = TITLE_FONT
     settings["A3"] = "시트 구조"
     settings["A4"] = "1번째 시트 출퇴근기록: 이름 / 시간 / 구분 / 층"
     settings["A5"] = "2번째 시트 학생명부: 층 / 이름 / 사용여부 / 비고"
+    settings["A6"] = "3번째 시트 시간표: 요일 / 1타임 / 2타임 / 3타임 / 비고 / 사용여부"
     settings["A7"] = "학생명부 사용 방법"
     settings["A8"] = "층은 4층 또는 5층을 선택합니다."
     settings["A9"] = "사용여부가 Y인 학생만 앱 이름 목록에 표시됩니다."
     settings["A10"] = "사용여부를 N으로 바꾸면 과거 기록은 유지하고 선택 목록에서만 제외됩니다."
-    settings["A12"] = "Apps Script 배포 후"
-    settings["A13"] = "Code.gs의 SPREADSHEET_ID에는 이 구글시트의 ID를 입력합니다."
-    settings["A14"] = "Netlify 환경변수에 GOOGLE_APPS_SCRIPT_URL, ATTENDANCE_PROXY_SECRET, ATTENDANCE_QR_SECRET을 저장합니다."
+    settings["A12"] = "시간표 사용 방법"
+    settings["A13"] = "월~금 각 요일 행에 상호대차 1타임, 2타임, 3타임 담당 학생명을 입력합니다."
+    settings["A14"] = "디스플레이 화면에는 오늘 요일의 3타임 담당자만 표시됩니다."
+    settings["A15"] = "사용여부가 N인 요일 행은 디스플레이에서 비활성 안내로 표시됩니다."
+    settings["A17"] = "Apps Script 배포 후"
+    settings["A18"] = "Code.gs의 SPREADSHEET_ID에는 이 구글시트의 ID를 입력합니다."
+    settings["A19"] = "Netlify 환경변수에 GOOGLE_APPS_SCRIPT_URL, ATTENDANCE_PROXY_SECRET, ATTENDANCE_QR_SECRET을 저장합니다."
     settings.merge_cells("A1:D1")
     settings["A3"].fill = SUBTLE_FILL
     settings["A7"].fill = SUBTLE_FILL
     settings["A12"].fill = SUBTLE_FILL
-    for row in range(3, 15):
-      settings[f"A{row}"].font = BODY_FONT if row not in (3, 7, 12) else Font(bold=True, color="10231F")
+    settings["A17"].fill = SUBTLE_FILL
+    for row in range(3, 20):
+      settings[f"A{row}"].font = BODY_FONT if row not in (3, 7, 12, 17) else Font(bold=True, color="10231F")
       settings[f"A{row}"].alignment = Alignment(wrap_text=True, vertical="center")
     settings.column_dimensions["A"].width = 86
     settings.column_dimensions["B"].width = 12
     settings.sheet_view.showGridLines = False
-    settings["A16"] = "주의"
-    settings["A17"] = "민감한 값은 브라우저 파일에 넣지 말고 Netlify 환경변수와 Apps Script 스크립트 속성에 저장합니다."
-    settings["A16"].fill = NOTE_FILL
-    settings["A16"].font = Font(bold=True, color="10231F")
-    settings["A17"].font = MUTED_FONT
-    settings["A17"].alignment = Alignment(wrap_text=True, vertical="center")
+    settings["A21"] = "주의"
+    settings["A22"] = "민감한 값은 브라우저 파일에 넣지 말고 Netlify 환경변수와 Apps Script 스크립트 속성에 저장합니다."
+    settings["A21"].fill = NOTE_FILL
+    settings["A21"].font = Font(bold=True, color="10231F")
+    settings["A22"].font = MUTED_FONT
+    settings["A22"].alignment = Alignment(wrap_text=True, vertical="center")
 
-    for ws in (attendance, roster, settings):
+    for ws in (attendance, roster, schedule, settings):
         ws.sheet_view.showGridLines = False
 
     return wb
@@ -132,12 +168,17 @@ def build_workbook():
 
 def verify(path):
     wb = load_workbook(path)
-    assert wb.sheetnames == ["출퇴근기록", "학생명부", "설정"]
+    assert wb.sheetnames == ["출퇴근기록", "학생명부", "시간표", "설정"]
     assert [cell.value for cell in wb["출퇴근기록"][1][:4]] == ["이름", "시간", "구분", "층"]
     assert [cell.value for cell in wb["학생명부"][1][:4]] == ["층", "이름", "사용여부", "비고"]
+    assert [cell.value for cell in wb["시간표"][1][:6]] == ["요일", "1타임", "2타임", "3타임", "비고", "사용여부"]
     assert wb["학생명부"]["A2"].value == "4층"
     assert wb["학생명부"]["C6"].value == "N"
+    assert wb["시간표"]["A2"].value == "월"
+    assert wb["시간표"]["A6"].value == "금"
+    assert wb["시간표"]["B2"].value == "홍길동"
     assert len(wb["학생명부"].data_validations.dataValidation) == 2
+    assert len(wb["시간표"].data_validations.dataValidation) == 2
 
 
 def main():

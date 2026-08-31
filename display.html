@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260824-campus-bg-1">
+  <link rel="stylesheet" href="./styles.css?v=20260831-interloan-1">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260824-campus-bg-1" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260831-interloan-1" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -38,11 +38,31 @@
         <strong id="nextChange">다음 변경 확인 중</strong>
       </div>
     </section>
+
+    <section class="schedule-stage" aria-label="상호대차 담당자">
+      <div class="schedule-heading">
+        <div>
+          <strong>상호대차 담당자</strong>
+        </div>
+        <time id="scheduleUpdated">불러오는 중</time>
+      </div>
+      <div class="schedule-table-wrap">
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th scope="col">타임</th>
+              <th scope="col">담당자</th>
+            </tr>
+          </thead>
+          <tbody id="scheduleBody"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
-  <script src="./config.js?v=20260824-campus-bg-1"></script>
+  <script src="./config.js?v=20260831-interloan-1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260824-campus-bg-1"></script>
+  <script src="./shared.js?v=20260831-interloan-1"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -50,8 +70,11 @@
     const displayDate = document.getElementById("displayDate");
     const slotLabel = document.getElementById("slotLabel");
     const nextChange = document.getElementById("nextChange");
+    const scheduleBody = document.getElementById("scheduleBody");
+    const scheduleUpdated = document.getElementById("scheduleUpdated");
     let lastToken = "";
     let renderInFlight = false;
+    let scheduleInFlight = false;
     let retryTimer = null;
     let qrLibraryPromise = null;
 
@@ -155,10 +178,67 @@
       }
     }
 
+    function buildDefaultScheduleSlots() {
+      return ["1타임", "2타임", "3타임"].map((label) => ({
+        label,
+        staff: "",
+        note: ""
+      }));
+    }
+
+    function buildPreviewScheduleSlots() {
+      return [
+        { label: "1타임", staff: "홍길동", note: "" },
+        { label: "2타임", staff: "김학생", note: "" },
+        { label: "3타임", staff: "이근로", note: "" }
+      ];
+    }
+
+    function isLocalPreview() {
+      return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    }
+
+    function renderSchedule(slots) {
+      scheduleBody.innerHTML = "";
+      slots.forEach((slot) => {
+        const row = document.createElement("tr");
+
+        const labelCell = document.createElement("th");
+        labelCell.scope = "row";
+        labelCell.textContent = slot.label || "-";
+
+        const staffCell = document.createElement("td");
+        staffCell.textContent = slot.staff || "-";
+
+        row.append(labelCell, staffCell);
+        scheduleBody.appendChild(row);
+      });
+    }
+
+    async function loadSchedule() {
+      if (scheduleInFlight) return;
+      scheduleInFlight = true;
+
+      try {
+        const data = await AttendanceApi.call("schedule");
+        if (!data.ok) throw new Error(data.message || "시간표를 불러오지 못했습니다.");
+        const slots = Array.isArray(data.slots) && data.slots.length ? data.slots : buildDefaultScheduleSlots();
+        renderSchedule(slots);
+        scheduleUpdated.textContent = data.updatedAt ? `${data.updatedAt} 기준` : "방금 갱신";
+      } catch (error) {
+        renderSchedule(isLocalPreview() ? buildPreviewScheduleSlots() : buildDefaultScheduleSlots());
+        scheduleUpdated.textContent = "연결 대기";
+      } finally {
+        scheduleInFlight = false;
+      }
+    }
+
     updateClock();
     setInterval(updateClock, 1000);
     renderQr();
+    loadSchedule();
     setInterval(renderQr, 30000);
+    setInterval(loadSchedule, 300000);
   </script>
 </body>
 </html>

@@ -1,4 +1,4 @@
 window.ATTENDANCE_CONFIG = {
-  version: "20260824-campus-bg-1",
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbzuHEyyV84-8f2h-IOwYOpZA58_IvzBqwjwWIEo72_2uVmtJegY-ZSxqAVKAzg7H-SS1w/exec"
+  version: "20260831-interloan-1",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycby2uwP0w--itdprPwu3hCT1U69UB0jiP1ADGholYgidM0gcJmBML_iPc4D38dPyostn5w/exec"
 };

@@ -22,7 +22,7 @@ GitHub Pages 정적 HTML과 Google Sheets Apps Script로 동작하는 출퇴근 
 - `admin.html`: 관리자 PIN 인증 후 QR 교체 주기 설정
 - `config.js`: GitHub Pages에서 호출할 Apps Script 웹 앱 URL 설정
 - `netlify/functions/attendance.js`: QR 발급, QR 토큰 검증, Apps Script 프록시
-- `apps-script/Code.gs`: Google Sheet 명부 조회, 출퇴근 기록, QR 주기 설정 저장
+- `apps-script/Code.gs`: Google Sheet 명부/시간표 조회, 출퇴근 기록, QR 주기 설정 저장
 
 ## Apps Script 설정
 
@@ -42,6 +42,7 @@ ATTENDANCE_SITE_URL=https://내-github-id.github.io/내-repository
 `ATTENDANCE_ADMIN_PIN`을 새로 만들 필요는 없습니다. 기존 `ATTENDANCE_DISPLAY_PIN`을 관리자 PIN으로 계속 읽습니다.
 
 4. `setupSpreadsheet` 함수를 한 번 실행합니다.
+   - `출퇴근기록`, `학생명부`, `시간표` 시트가 없으면 자동으로 만들어집니다.
 5. `배포 > 새 배포 > 웹 앱`을 선택합니다.
 6. 실행 권한은 `나`, 액세스 권한은 `모든 사용자`로 설정하고 배포합니다.
 7. 발급된 웹 앱 URL을 `config.js`의 `appsScriptUrl`에 넣습니다.
@@ -114,6 +115,26 @@ ATTENDANCE_APPS_SCRIPT_TIMEOUT_MS=8000
 - 6시간마다
 
 기존 `ATTENDANCE_QR_REFRESH_TIMES`가 설정되어 있으면 위 interval보다 고정 시각 목록이 우선됩니다. 예를 들어 `08:30,10:30,12:30,14:30,16:30`이면 해당 시각마다 QR이 바뀝니다.
+
+## 디스플레이 시간표
+
+모니터용 `display.html`은 QR 코드와 함께 오늘 요일의 상호대차 담당 학생을 표시합니다. 시간표는 Google Sheet의 `시간표` 시트에서 읽으며, 월요일부터 금요일까지 각 요일별 1타임, 2타임, 3타임 담당자를 관리합니다.
+
+`시간표` 시트 형식:
+
+```text
+요일 | 1타임 | 2타임 | 3타임 | 비고 | 사용여부
+월   | 홍길동 | 김학생 | 이근로 |      | Y
+화   |        |        |        |      | Y
+수   |        |        |        |      | Y
+목   |        |        |        |      | Y
+금   |        |        |        |      | Y
+```
+
+- `1타임`, `2타임`, `3타임` 칸에 해당 요일의 상호대차 담당 학생명을 입력합니다.
+- 디스플레이에는 오늘 요일의 3타임 담당자만 표시됩니다.
+- `사용여부`가 `N`이면 해당 요일은 비활성 안내로 표시됩니다.
+- Apps Script는 시간표를 60초간 캐시합니다. 즉시 반영해야 하면 Apps Script 편집기에서 `clearScheduleCache` 함수를 한 번 실행하세요.
 
 ## 사용
 
