@@ -54,7 +54,7 @@ def build_workbook():
     attendance = wb.active
     attendance.title = "출퇴근기록"
     roster = wb.create_sheet("학생명부")
-    schedule = wb.create_sheet("시간표")
+    schedule = wb.create_sheet("상호대차 시간표")
     settings = wb.create_sheet("설정")
 
     attendance.append(["이름", "시간", "구분", "층"])
@@ -130,7 +130,7 @@ def build_workbook():
     settings["A3"] = "시트 구조"
     settings["A4"] = "1번째 시트 출퇴근기록: 이름 / 시간 / 구분 / 층"
     settings["A5"] = "2번째 시트 학생명부: 층 / 이름 / 사용여부 / 비고"
-    settings["A6"] = "3번째 시트 시간표: 요일 / 1타임 / 2타임 / 3타임 / 비고 / 사용여부"
+    settings["A6"] = "3번째 시트 상호대차 시간표: 요일 / 1타임 / 2타임 / 3타임 / 비고 / 사용여부"
     settings["A7"] = "학생명부 사용 방법"
     settings["A8"] = "층은 4층 또는 5층을 선택합니다."
     settings["A9"] = "사용여부가 Y인 학생만 앱 이름 목록에 표시됩니다."
@@ -168,17 +168,17 @@ def build_workbook():
 
 def verify(path):
     wb = load_workbook(path)
-    assert wb.sheetnames == ["출퇴근기록", "학생명부", "시간표", "설정"]
+    assert wb.sheetnames == ["출퇴근기록", "학생명부", "상호대차 시간표", "설정"]
     assert [cell.value for cell in wb["출퇴근기록"][1][:4]] == ["이름", "시간", "구분", "층"]
     assert [cell.value for cell in wb["학생명부"][1][:4]] == ["층", "이름", "사용여부", "비고"]
-    assert [cell.value for cell in wb["시간표"][1][:6]] == ["요일", "1타임", "2타임", "3타임", "비고", "사용여부"]
+    assert [cell.value for cell in wb["상호대차 시간표"][1][:6]] == ["요일", "1타임", "2타임", "3타임", "비고", "사용여부"]
     assert wb["학생명부"]["A2"].value == "4층"
     assert wb["학생명부"]["C6"].value == "N"
-    assert wb["시간표"]["A2"].value == "월"
-    assert wb["시간표"]["A6"].value == "금"
-    assert wb["시간표"]["B2"].value is None
+    assert wb["상호대차 시간표"]["A2"].value == "월"
+    assert wb["상호대차 시간표"]["A6"].value == "금"
+    assert wb["상호대차 시간표"]["B2"].value is None
     assert len(wb["학생명부"].data_validations.dataValidation) == 2
-    assert len(wb["시간표"].data_validations.dataValidation) == 2
+    assert len(wb["상호대차 시간표"].data_validations.dataValidation) == 2
 
 
 def main():
