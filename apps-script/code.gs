@@ -3,6 +3,7 @@ const CONFIG = {
   ATTENDANCE_SHEET_NAME: "출퇴근기록",
   STUDENT_SHEET_NAME: "학생명부",
   SCHEDULE_SHEET_NAME: "상호대차 시간표",
+  LEGACY_SCHEDULE_SHEET_NAME: "시간표",
   TIMEZONE: "Asia/Seoul",
   TIMEZONE_PROPERTY: "ATTENDANCE_TIMEZONE",
   PROXY_SECRET_PROPERTY: "ATTENDANCE_PROXY_SECRET",
@@ -91,10 +92,51 @@ function setupSpreadsheet() {
     });
   }
 
+  cleanupLegacyScheduleSheet_(ss);
+
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty(CONFIG.QR_INTERVAL_PROPERTY)) {
     props.setProperty(CONFIG.QR_INTERVAL_PROPERTY, String(CONFIG.DEFAULT_QR_INTERVAL_MINUTES));
   }
+}
+
+function cleanupLegacyScheduleSheet() {
+  cleanupLegacyScheduleSheet_(getSpreadsheet_());
+}
+
+function cleanupLegacyScheduleSheet_(ss) {
+  if (CONFIG.LEGACY_SCHEDULE_SHEET_NAME === CONFIG.SCHEDULE_SHEET_NAME) return;
+
+  const legacy = ss.getSheetByName(CONFIG.LEGACY_SCHEDULE_SHEET_NAME);
+  if (!legacy) return;
+  if (ss.getSheets().length <= 1) return;
+
+  if (isDisposableLegacyScheduleSheet_(legacy)) {
+    ss.deleteSheet(legacy);
+    return;
+  }
+
+  if (!legacy.isSheetHidden()) {
+    legacy.hideSheet();
+  }
+}
+
+function isDisposableLegacyScheduleSheet_(sheet) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow === 0 || lastColumn === 0) return true;
+
+  const allowedValues = [
+    "요일", "1타임", "2타임", "3타임", "비고", "사용여부",
+    "월", "화", "수", "목", "금", "Y"
+  ];
+  const values = sheet.getRange(1, 1, lastRow, lastColumn).getDisplayValues();
+  return values.every(function (row) {
+    return row.every(function (cell) {
+      const text = String(cell || "").trim();
+      return !text || allowedValues.indexOf(text) !== -1;
+    });
+  });
 }
 
 function getSettings_() {
