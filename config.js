@@ -1,4 +1,4 @@
 window.ATTENDANCE_CONFIG = {
-  version: "20260831-interloan-3",
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycby2uwP0w--itdprPwu3hCT1U69UB0jiP1ADGholYgidM0gcJmBML_iPc4D38dPyostn5w/exec"
+  version: "20260901-appscript-url",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyQ2X4mWdaxwKAYaaX3-7yUp4ZzzPWS2OhAzrTJ8a6pkZG5-y5oAsCsXPuRmRM7yVsomw/exec"
 };
