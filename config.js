@@ -1,4 +1,4 @@
 window.ATTENDANCE_CONFIG = {
-  version: "20260901-appscript-url",
-  appsScriptUrl: "https://script.google.com/macros/s/AKfycbyQ2X4mWdaxwKAYaaX3-7yUp4ZzzPWS2OhAzrTJ8a6pkZG5-y5oAsCsXPuRmRM7yVsomw/exec"
+  version: "20260901-appscript-url-2",
+  appsScriptUrl: "https://script.google.com/macros/s/AKfycbxopg496FFI-I9KQXMyQVqL5Cjf__mKPhbAYI0O1xOrBTgONFH75BJoSCrEkMIEXvgdlg/exec"
 };
