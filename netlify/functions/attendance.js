@@ -7,6 +7,7 @@ const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 const ROSTER_STALE_TTL_MS = 12 * 60 * 60 * 1000;
 const SETTINGS_CACHE_TTL_MS = 60 * 1000;
 const SCHEDULE_CACHE_TTL_MS = 30 * 1000;
+const RECENT_LOGS_CACHE_TTL_MS = 5 * 1000;
 
 let rosterCache = {
   students: null,
@@ -18,6 +19,10 @@ let settingsCache = {
   expiresAt: 0
 };
 let scheduleCache = {
+  payload: null,
+  expiresAt: 0
+};
+let recentLogsCache = {
   payload: null,
   expiresAt: 0
 };
@@ -40,6 +45,10 @@ exports.handler = async function handler(event) {
       return json(await getSchedulePayload(isForceRefresh(body.refresh)));
     }
 
+    if (action === "recentLogs") {
+      return json(await getRecentLogsPayload(isForceRefresh(body.refresh)));
+    }
+
     if (action === "log") {
       const settings = await getPublicSettings();
       const token = String(body.token || "").trim();
@@ -47,12 +56,16 @@ exports.handler = async function handler(event) {
         return json({ ok: false, message: "QR 코드가 만료되었습니다. 모니터의 최신 QR을 다시 스캔해 주세요." }, 400);
       }
 
-      return json(await callAppsScript({
+      const result = await callAppsScript({
         action: "log",
         floor: body.floor,
         name: body.name,
         kind: body.kind
-      }, { timeoutMs: 15000 }));
+      }, { timeoutMs: 15000 });
+      if (result.ok) {
+        recentLogsCache = { payload: null, expiresAt: 0 };
+      }
+      return json(result);
     }
 
     if (action === "adminStatus") {
@@ -193,6 +206,28 @@ async function getSchedulePayload(forceRefresh = false) {
   scheduleCache = {
     payload,
     expiresAt: now + SCHEDULE_CACHE_TTL_MS
+  };
+  return payload;
+}
+
+async function getRecentLogsPayload(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && recentLogsCache.payload && now < recentLogsCache.expiresAt) {
+    return Object.assign({}, recentLogsCache.payload, { cached: true });
+  }
+
+  const params = forceRefresh ? { action: "recentLogs", refresh: "1" } : { action: "recentLogs" };
+  const result = await callAppsScript(params, { timeoutMs: getAppsScriptTimeoutMs(), retries: 1 });
+  if (!result.ok) throw new Error(result.message || "최근 출퇴근 기록을 불러오지 못했습니다.");
+
+  const payload = {
+    ok: true,
+    entries: Array.isArray(result.entries) ? result.entries : [],
+    updatedAt: result.updatedAt || ""
+  };
+  recentLogsCache = {
+    payload,
+    expiresAt: now + RECENT_LOGS_CACHE_TTL_MS
   };
   return payload;
 }

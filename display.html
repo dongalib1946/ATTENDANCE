@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260901-appscript-url-3">
+  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260901-appscript-url-3" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -24,6 +24,14 @@
       </div>
       <h1>QR코드를 스캔하세요.</h1>
       <p class="display-status" id="displayStatus">QR 코드를 준비하고 있습니다.</p>
+    </section>
+
+    <section class="recent-stage" id="recentStage" aria-label="최근 출퇴근 처리 내역" hidden>
+      <div class="recent-heading">
+        <strong>최근 출퇴근</strong>
+        <time id="recentUpdated">불러오는 중</time>
+      </div>
+      <div class="recent-list" id="recentList"></div>
     </section>
 
     <section class="qr-stage" aria-label="현재 출퇴근 QR 코드">
@@ -64,9 +72,9 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260901-appscript-url-3"></script>
+  <script src="./config.js?v=20260902-recent-logs"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260901-appscript-url-3"></script>
+  <script src="./shared.js?v=20260902-recent-logs"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -78,12 +86,18 @@
     const scheduleBody = document.getElementById("scheduleBody");
     const scheduleUpdated = document.getElementById("scheduleUpdated");
     const scheduleRefreshButton = document.getElementById("scheduleRefreshButton");
+    const recentStage = document.getElementById("recentStage");
+    const recentList = document.getElementById("recentList");
+    const recentUpdated = document.getElementById("recentUpdated");
     let lastToken = "";
     let renderInFlight = false;
     let scheduleInFlight = false;
+    let recentLogsInFlight = false;
     let scheduleDayKey = getScheduleDayKey();
     let lastScheduleSignature = "";
+    let lastRecentLogsSignature = "";
     let hasScheduleLoaded = false;
+    let hasRecentLogsLoaded = false;
     let retryTimer = null;
     let qrLibraryPromise = null;
 
@@ -224,6 +238,76 @@
       });
     }
 
+    function formatRecentTime(recordedAt) {
+      const match = String(recordedAt || "").match(/(\d{2}):(\d{2})/);
+      return match ? `${match[1]}:${match[2]}` : String(recordedAt || "");
+    }
+
+    function renderRecentLogs(entries) {
+      recentList.innerHTML = "";
+      if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.className = "recent-empty";
+        empty.textContent = "최근 처리 내역이 없습니다.";
+        recentList.appendChild(empty);
+        return;
+      }
+
+      entries.slice(0, 3).forEach((entry) => {
+        const item = document.createElement("article");
+        const kind = entry.kindLabel || "-";
+        item.className = "recent-item" + (kind === "퇴근" ? " is-out" : "");
+
+        const kindBadge = document.createElement("span");
+        kindBadge.className = "recent-kind";
+        kindBadge.textContent = kind;
+
+        const name = document.createElement("strong");
+        name.textContent = entry.name || "-";
+
+        const meta = document.createElement("span");
+        meta.className = "recent-meta";
+        meta.textContent = [entry.floor, formatRecentTime(entry.recordedAt)].filter(Boolean).join(" · ");
+
+        item.append(kindBadge, name, meta);
+        recentList.appendChild(item);
+      });
+    }
+
+    async function loadRecentLogs(options = {}) {
+      if (recentLogsInFlight) return;
+      recentLogsInFlight = true;
+
+      try {
+        const params = options.force ? { refresh: "1" } : {};
+        const data = await AttendanceApi.call("recentLogs", params);
+        if (!data.ok) throw new Error(data.message || "최근 출퇴근 기록을 불러오지 못했습니다.");
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        const signature = JSON.stringify(entries.map((entry) => ({
+          name: entry.name || "",
+          recordedAt: entry.recordedAt || "",
+          kindLabel: entry.kindLabel || "",
+          floor: entry.floor || ""
+        })));
+        if (signature !== lastRecentLogsSignature) {
+          renderRecentLogs(entries);
+          lastRecentLogsSignature = signature;
+        }
+        recentStage.hidden = false;
+        hasRecentLogsLoaded = true;
+        recentUpdated.textContent = data.updatedAt ? `${data.updatedAt} 기준` : "방금 갱신";
+      } catch (error) {
+        if (!hasRecentLogsLoaded) {
+          recentStage.hidden = true;
+          renderRecentLogs([]);
+        } else {
+          recentUpdated.textContent = "갱신 지연";
+        }
+      } finally {
+        recentLogsInFlight = false;
+      }
+    }
+
     async function loadSchedule(options = {}) {
       if (scheduleInFlight) return;
       const isManualRefresh = Boolean(options.manual);
@@ -275,9 +359,11 @@
     setInterval(updateClock, 1000);
     renderQr();
     loadSchedule();
+    loadRecentLogs({ force: true });
     scheduleRefreshButton.addEventListener("click", () => loadSchedule({ force: true, manual: true }));
     setInterval(renderQr, 30000);
     setInterval(loadSchedule, 60 * 1000);
+    setInterval(loadRecentLogs, 10 * 1000);
     setInterval(refreshScheduleOnDayChange, 60 * 1000);
   </script>
 </body>

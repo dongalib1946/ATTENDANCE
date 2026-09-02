@@ -20,6 +20,9 @@ const CONFIG = {
   ROSTER_CACHE_SECONDS: 300,
   SCHEDULE_CACHE_KEY: "interloanSchedule:v2",
   SCHEDULE_CACHE_SECONDS: 30,
+  RECENT_ATTENDANCE_CACHE_KEY: "recentAttendance:v1",
+  RECENT_ATTENDANCE_CACHE_SECONDS: 5,
+  RECENT_ATTENDANCE_LIMIT: 3,
   SCHEDULE_WEEKDAYS: ["월", "화", "수", "목", "금"],
   SCHEDULE_TIME_LABELS: ["1타임", "2타임", "3타임"]
 };
@@ -45,6 +48,8 @@ function doGet(e) {
         updatedAt: getNowLabel_(),
         note: schedule.note
       };
+    } else if (action === "recentLogs") {
+      payload = getRecentAttendancePayload_(isForceRefresh_(params.refresh));
     } else if (action === "roster") {
       if (!hasProxyAccess) requireValidToken_(params.token);
       payload = { ok: true, students: getRoster_() };
@@ -355,8 +360,60 @@ function logAttendance_(params) {
   const recordedAt = Utilities.formatDate(now, getTimezone_(), "yyyy-MM-dd HH:mm:ss");
   const kindLabel = kind === "in" ? "출근" : "퇴근";
   sheet.appendRow([name, recordedAt, kindLabel, floor]);
+  clearRecentAttendanceCache_();
 
   return { ok: true, floor, name, kindLabel, recordedAt };
+}
+
+function getRecentAttendancePayload_(forceRefresh) {
+  const cache = CacheService.getScriptCache();
+  const cached = forceRefresh ? "" : cache.get(CONFIG.RECENT_ATTENDANCE_CACHE_KEY);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      cache.remove(CONFIG.RECENT_ATTENDANCE_CACHE_KEY);
+    }
+  }
+
+  const payload = {
+    ok: true,
+    entries: readRecentAttendanceEntries_(),
+    updatedAt: getNowLabel_()
+  };
+  cache.put(CONFIG.RECENT_ATTENDANCE_CACHE_KEY, JSON.stringify(payload), CONFIG.RECENT_ATTENDANCE_CACHE_SECONDS);
+  return payload;
+}
+
+function readRecentAttendanceEntries_() {
+  const ss = getSpreadsheet_();
+  const sheet = getOrCreateSheet_(ss, CONFIG.ATTENDANCE_SHEET_NAME);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const startRow = Math.max(2, lastRow - 49);
+  const values = sheet
+    .getRange(startRow, 1, lastRow - startRow + 1, Math.max(4, sheet.getLastColumn()))
+    .getDisplayValues();
+  const entries = [];
+
+  for (let index = values.length - 1; index >= 0 && entries.length < CONFIG.RECENT_ATTENDANCE_LIMIT; index -= 1) {
+    const row = values[index];
+    const name = String(row[0] || "").trim();
+    const recordedAt = String(row[1] || "").trim();
+    const kindLabel = String(row[2] || "").trim();
+    const floor = normalizeFloor_(row[3]);
+    if (!name || !recordedAt || !kindLabel) continue;
+
+    entries.push({
+      name: name,
+      recordedAt: recordedAt,
+      kindLabel: kindLabel,
+      floor: floor
+    });
+  }
+
+  return entries;
 }
 
 function getRoster_() {
@@ -535,6 +592,14 @@ function clearRosterCache() {
 
 function clearScheduleCache() {
   CacheService.getScriptCache().remove(CONFIG.SCHEDULE_CACHE_KEY);
+}
+
+function clearRecentAttendanceCache() {
+  clearRecentAttendanceCache_();
+}
+
+function clearRecentAttendanceCache_() {
+  CacheService.getScriptCache().remove(CONFIG.RECENT_ATTENDANCE_CACHE_KEY);
 }
 
 function isForceRefresh_(value) {

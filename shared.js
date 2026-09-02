@@ -5,6 +5,7 @@
     qr: { timeoutMs: 8000, retries: 2 },
     roster: { timeoutMs: 30000, retries: 1 },
     schedule: { timeoutMs: 12000, retries: 1 },
+    recentLogs: { timeoutMs: 8000, retries: 1 },
     settings: { timeoutMs: 8000, retries: 1 },
     adminStatus: { timeoutMs: 12000, retries: 1 },
     updateSettings: { timeoutMs: 12000, retries: 1 },
