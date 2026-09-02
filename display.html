@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-4">
+  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-5">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-4" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-5" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -32,7 +32,10 @@
           <strong>최근 출퇴근</strong>
           <span>화면 반영까지 잠시 지연될 수 있습니다.</span>
         </div>
-        <time id="recentUpdated">불러오는 중</time>
+        <div class="recent-actions">
+          <button class="recent-sound-button" id="recentSoundButton" type="button" aria-pressed="false">소리 켜기</button>
+          <time id="recentUpdated">불러오는 중</time>
+        </div>
       </div>
       <div class="recent-list" id="recentList"></div>
     </section>
@@ -75,9 +78,9 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260902-recent-logs-4"></script>
+  <script src="./config.js?v=20260902-recent-logs-5"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260902-recent-logs-4"></script>
+  <script src="./shared.js?v=20260902-recent-logs-5"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -92,6 +95,7 @@
     const recentStage = document.getElementById("recentStage");
     const recentList = document.getElementById("recentList");
     const recentUpdated = document.getElementById("recentUpdated");
+    const recentSoundButton = document.getElementById("recentSoundButton");
     let lastToken = "";
     let renderInFlight = false;
     let scheduleInFlight = false;
@@ -103,6 +107,8 @@
     let hasRecentLogsLoaded = false;
     let retryTimer = null;
     let qrLibraryPromise = null;
+    let recentSoundEnabled = false;
+    let recentSoundContext = null;
 
     function updateClock() {
       const now = new Date();
@@ -285,6 +291,52 @@
       });
     }
 
+    function getRecentSoundContext() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      if (!recentSoundContext) recentSoundContext = new AudioContextClass();
+      if (recentSoundContext.state === "suspended") {
+        recentSoundContext.resume().catch(() => {});
+      }
+      return recentSoundContext;
+    }
+
+    function playRecentTone(context, frequency, start, duration, volume) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.04);
+    }
+
+    function playRecentLogSound() {
+      if (!recentSoundEnabled) return;
+      const context = getRecentSoundContext();
+      if (!context) return;
+      const start = context.currentTime;
+      playRecentTone(context, 880, start, 0.14, 0.11);
+      playRecentTone(context, 1174.66, start + 0.16, 0.18, 0.1);
+    }
+
+    function enableRecentLogSound() {
+      const context = getRecentSoundContext();
+      if (!context) {
+        recentSoundButton.textContent = "소리 미지원";
+        recentSoundButton.disabled = true;
+        return;
+      }
+      recentSoundEnabled = true;
+      recentSoundButton.textContent = "소리 켜짐";
+      recentSoundButton.setAttribute("aria-pressed", "true");
+      playRecentLogSound();
+    }
+
     async function loadRecentLogs(options = {}) {
       if (recentLogsInFlight) return;
       recentLogsInFlight = true;
@@ -301,8 +353,10 @@
           floor: entry.floor || ""
         })));
         if (signature !== lastRecentLogsSignature) {
+          const shouldPlaySound = hasRecentLogsLoaded && entries.length > 0;
           renderRecentLogs(entries);
           lastRecentLogsSignature = signature;
+          if (shouldPlaySound) playRecentLogSound();
         }
         recentStage.hidden = false;
         hasRecentLogsLoaded = true;
@@ -371,6 +425,7 @@
     renderQr();
     loadSchedule();
     loadRecentLogs({ force: true });
+    recentSoundButton.addEventListener("click", enableRecentLogSound);
     scheduleRefreshButton.addEventListener("click", () => loadSchedule({ force: true, manual: true }));
     setInterval(renderQr, 30000);
     setInterval(loadSchedule, 60 * 1000);
