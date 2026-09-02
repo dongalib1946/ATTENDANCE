@@ -7,7 +7,7 @@ const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 const ROSTER_STALE_TTL_MS = 12 * 60 * 60 * 1000;
 const SETTINGS_CACHE_TTL_MS = 60 * 1000;
 const SCHEDULE_CACHE_TTL_MS = 30 * 1000;
-const RECENT_LOGS_CACHE_TTL_MS = 5 * 1000;
+const RECENT_LOGS_CACHE_TTL_MS = 1 * 1000;
 
 let rosterCache = {
   students: null,
