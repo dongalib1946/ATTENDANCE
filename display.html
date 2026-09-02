@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-5">
+  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-6">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-5" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-6" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -33,7 +33,7 @@
           <span>화면 반영까지 잠시 지연될 수 있습니다.</span>
         </div>
         <div class="recent-actions">
-          <button class="recent-sound-button" id="recentSoundButton" type="button" aria-pressed="false">소리 켜기</button>
+          <button class="recent-sound-button" id="recentSoundButton" type="button" aria-pressed="false">음성 켜기</button>
           <time id="recentUpdated">불러오는 중</time>
         </div>
       </div>
@@ -78,9 +78,9 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260902-recent-logs-5"></script>
+  <script src="./config.js?v=20260902-recent-logs-6"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260902-recent-logs-5"></script>
+  <script src="./shared.js?v=20260902-recent-logs-6"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -315,24 +315,61 @@
       oscillator.stop(start + duration + 0.04);
     }
 
-    function playRecentLogSound() {
+    function getRecentKindLabel(kindLabel) {
+      const text = String(kindLabel || "");
+      if (text.indexOf("퇴근") !== -1) return "퇴근";
+      if (text.indexOf("출근") !== -1) return "출근";
+      return "";
+    }
+
+    function getKoreanSpeechVoice() {
+      if (!("speechSynthesis" in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      return voices.find((voice) => String(voice.lang || "").toLowerCase().startsWith("ko"))
+        || voices.find((voice) => /korean|한국|ko/i.test(String(voice.name || "")))
+        || null;
+    }
+
+    function speakRecentKind(kindLabel) {
       if (!recentSoundEnabled) return;
+      if (!("speechSynthesis" in window) || !window.SpeechSynthesisUtterance) return;
+
+      const kind = getRecentKindLabel(kindLabel);
+      if (!kind) return;
+
+      const utterance = new SpeechSynthesisUtterance(kind);
+      const voice = getKoreanSpeechVoice();
+      utterance.lang = "ko-KR";
+      utterance.rate = 0.92;
+      utterance.pitch = 1.05;
+      utterance.volume = 1;
+      if (voice) utterance.voice = voice;
+
+      window.speechSynthesis.cancel();
+      window.setTimeout(() => window.speechSynthesis.speak(utterance), 120);
+    }
+
+    function playRecentLogSound(kindLabel) {
       const context = getRecentSoundContext();
-      if (!context) return;
-      const start = context.currentTime;
-      playRecentTone(context, 880, start, 0.14, 0.11);
-      playRecentTone(context, 1174.66, start + 0.16, 0.18, 0.1);
+      if (context) {
+        const start = context.currentTime;
+        playRecentTone(context, 880, start, 0.14, 0.11);
+        playRecentTone(context, 1174.66, start + 0.16, 0.18, 0.1);
+      }
+      speakRecentKind(kindLabel);
     }
 
     function enableRecentLogSound() {
       const context = getRecentSoundContext();
-      if (!context) {
-        recentSoundButton.textContent = "소리 미지원";
+      const hasSpeech = "speechSynthesis" in window && Boolean(window.SpeechSynthesisUtterance);
+      if (!context && !hasSpeech) {
+        recentSoundButton.textContent = "음성 미지원";
         recentSoundButton.disabled = true;
         return;
       }
       recentSoundEnabled = true;
-      recentSoundButton.textContent = "소리 켜짐";
+      if (hasSpeech) window.speechSynthesis.getVoices();
+      recentSoundButton.textContent = hasSpeech ? "음성 켜짐" : "효과음 켜짐";
       recentSoundButton.setAttribute("aria-pressed", "true");
       playRecentLogSound();
     }
@@ -356,7 +393,7 @@
           const shouldPlaySound = hasRecentLogsLoaded && entries.length > 0;
           renderRecentLogs(entries);
           lastRecentLogsSignature = signature;
-          if (shouldPlaySound) playRecentLogSound();
+          if (shouldPlaySound) playRecentLogSound(entries[0].kindLabel);
         }
         recentStage.hidden = false;
         hasRecentLogsLoaded = true;
