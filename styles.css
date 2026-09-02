@@ -650,10 +650,24 @@ select:focus {
   gap: 16px;
 }
 
+.recent-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .recent-heading strong {
   font-size: 22px;
   font-weight: 900;
   line-height: 1.1;
+}
+
+.recent-title span {
+  color: #d7e7f6;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .recent-heading time {
@@ -970,6 +984,14 @@ select:focus {
     font-size: 19px;
   }
 
+  .recent-title {
+    gap: 8px;
+  }
+
+  .recent-title span {
+    font-size: 11px;
+  }
+
   .recent-item,
   .recent-empty {
     min-height: 62px;
@@ -1077,6 +1099,15 @@ select:focus {
   .recent-stage {
     width: min(86vw, 520px);
     justify-self: center;
+  }
+
+  .recent-heading {
+    align-items: flex-start;
+  }
+
+  .recent-title {
+    display: grid;
+    gap: 4px;
   }
 
   .recent-list {

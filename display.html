@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-3">
+  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-4">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-3" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260902-recent-logs-4" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -28,7 +28,10 @@
 
     <section class="recent-stage" id="recentStage" aria-label="최근 출퇴근 처리 내역" hidden>
       <div class="recent-heading">
-        <strong>최근 출퇴근</strong>
+        <div class="recent-title">
+          <strong>최근 출퇴근</strong>
+          <span>화면 반영까지 잠시 지연될 수 있습니다.</span>
+        </div>
         <time id="recentUpdated">불러오는 중</time>
       </div>
       <div class="recent-list" id="recentList"></div>
@@ -72,9 +75,9 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260902-recent-logs-3"></script>
+  <script src="./config.js?v=20260902-recent-logs-4"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260902-recent-logs-3"></script>
+  <script src="./shared.js?v=20260902-recent-logs-4"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
