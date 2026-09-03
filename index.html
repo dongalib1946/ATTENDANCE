@@ -73,14 +73,18 @@
     const loadingLayer = document.getElementById("loadingLayer");
     const loadingText = document.getElementById("loadingText");
     const retryRosterButton = document.getElementById("retryRosterButton");
+    const actionCooldownMs = 10000;
     let students = [];
     let selectedFloor = localStorage.getItem("attendance:lastFloor") || "";
+    let isActionCooldownActive = false;
+    let actionCooldownTimer = null;
 
     function setReadyState(isReady) {
       floorPicker.disabled = !isReady;
       studentSelect.disabled = !isReady || !selectedFloor;
-      clockInButton.disabled = !isReady || !studentSelect.value;
-      clockOutButton.disabled = !isReady || !studentSelect.value;
+      const canSubmit = isReady && !isActionCooldownActive && Boolean(studentSelect.value);
+      clockInButton.disabled = !canSubmit;
+      clockOutButton.disabled = !canSubmit;
       connectionStatus.classList.toggle("ready", isReady);
     }
 
@@ -97,6 +101,17 @@
 
     function setRosterRetryVisible(isVisible) {
       retryRosterButton.hidden = !isVisible;
+    }
+
+    function startActionCooldown() {
+      isActionCooldownActive = true;
+      window.clearTimeout(actionCooldownTimer);
+      setReadyState(true);
+
+      actionCooldownTimer = window.setTimeout(() => {
+        isActionCooldownActive = false;
+        setReadyState(true);
+      }, actionCooldownMs);
     }
 
     function normalizeStudent(student) {
@@ -201,8 +216,13 @@
 
         localStorage.setItem("attendance:lastFloor", selectedFloor);
         localStorage.setItem("attendance:lastName", name);
-        setResult(`${selectedFloor} ${name}님의 ${data.kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`, "success");
-        tokenNotice.textContent = "기록 완료. 필요한 경우에만 다시 눌러 주세요.";
+        const kindLabel = data.kindLabel || (kind === "in" ? "출근" : "퇴근");
+        setResult(`${selectedFloor} ${name}님의 ${kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`, "success");
+        const completionMessage = "이미 기록이 완료되었습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.";
+        tokenNotice.textContent = completionMessage;
+        setLoading(false);
+        startActionCooldown();
+        alert(completionMessage);
       } catch (error) {
         setResult(error.message, "error");
       } finally {
@@ -228,4 +248,3 @@
   </script>
 </body>
 </html>
-
