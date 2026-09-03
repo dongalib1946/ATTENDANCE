@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 출퇴근 기록</title>
-  <link rel="stylesheet" href="./styles.css?v=20260902-recent-logs-6">
+  <link rel="stylesheet" href="./styles.css?v=20260903-cooldown-20">
 </head>
 <body>
   <main class="app-shell">
@@ -73,7 +73,8 @@
     const loadingLayer = document.getElementById("loadingLayer");
     const loadingText = document.getElementById("loadingText");
     const retryRosterButton = document.getElementById("retryRosterButton");
-    const actionCooldownMs = 10000;
+    const actionCooldownMs = 20000;
+    const duplicateMessage = "이미 기록이 완료되었습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.";
     let students = [];
     let selectedFloor = localStorage.getItem("attendance:lastFloor") || "";
     let isActionCooldownActive = false;
@@ -82,9 +83,11 @@
     function setReadyState(isReady) {
       floorPicker.disabled = !isReady;
       studentSelect.disabled = !isReady || !selectedFloor;
-      const canSubmit = isReady && !isActionCooldownActive && Boolean(studentSelect.value);
+      const canSubmit = isReady && Boolean(studentSelect.value);
       clockInButton.disabled = !canSubmit;
       clockOutButton.disabled = !canSubmit;
+      clockInButton.setAttribute("aria-disabled", String(isActionCooldownActive && canSubmit));
+      clockOutButton.setAttribute("aria-disabled", String(isActionCooldownActive && canSubmit));
       connectionStatus.classList.toggle("ready", isReady);
     }
 
@@ -196,6 +199,10 @@
 
     async function submitAttendance(kind) {
       const name = studentSelect.value;
+      if (isActionCooldownActive) {
+        alert(duplicateMessage);
+        return;
+      }
       if (!selectedFloor) {
         setResult("근무 위치를 먼저 선택해 주세요.", "error");
         return;
@@ -218,7 +225,7 @@
         localStorage.setItem("attendance:lastName", name);
         const kindLabel = data.kindLabel || (kind === "in" ? "출근" : "퇴근");
         setResult(`${selectedFloor} ${name}님의 ${kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`, "success");
-        const completionMessage = "이미 기록이 완료되었습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.";
+        const completionMessage = `${kindLabel}을 완료했습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.`;
         tokenNotice.textContent = completionMessage;
         setLoading(false);
         startActionCooldown();
