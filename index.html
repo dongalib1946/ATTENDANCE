@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 출퇴근 기록</title>
-  <link rel="stylesheet" href="./styles.css?v=20260903-cache-bump-2">
+  <link rel="stylesheet" href="./styles.css?v=20260903-cache-bump-3">
 </head>
 <body>
   <main class="app-shell">
@@ -58,8 +58,8 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260903-cache-bump-2"></script>
-  <script src="./shared.js?v=20260903-cache-bump-2"></script>
+  <script src="./config.js?v=20260903-cache-bump-3"></script>
+  <script src="./shared.js?v=20260903-cache-bump-3"></script>
   <script>
     const token = new URLSearchParams(location.search).get("token") || "";
     const floorPicker = document.getElementById("floorPicker");
@@ -73,7 +73,7 @@
     const loadingLayer = document.getElementById("loadingLayer");
     const loadingText = document.getElementById("loadingText");
     const retryRosterButton = document.getElementById("retryRosterButton");
-    const actionCooldownMs = 40000;
+    const actionCooldownMs = 60000;
     const duplicateMessage = "이미 기록이 완료되었습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.";
     let students = [];
     let selectedFloor = localStorage.getItem("attendance:lastFloor") || "";
