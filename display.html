@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260903-cache-bump-1">
+  <link rel="stylesheet" href="./styles.css?v=20260903-cache-bump-2">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260903-cache-bump-1" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260903-cache-bump-2" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -78,9 +78,9 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260903-cache-bump-1"></script>
+  <script src="./config.js?v=20260903-cache-bump-2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260903-cache-bump-1"></script>
+  <script src="./shared.js?v=20260903-cache-bump-2"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -97,6 +97,7 @@
     const recentUpdated = document.getElementById("recentUpdated");
     const recentSoundButton = document.getElementById("recentSoundButton");
     let lastToken = "";
+    let lastScanUrl = "";
     let renderInFlight = false;
     let scheduleInFlight = false;
     let recentLogsInFlight = false;
@@ -190,11 +191,12 @@
         await ensureQrLibrary();
         const data = await AttendanceApi.call("qr");
         if (!data.ok) throw new Error(data.message || "QR을 만들 수 없습니다.");
+        const scanUrl = withAppVersion(data.scanUrl);
 
-        if (data.token !== lastToken) {
+        if (data.token !== lastToken || scanUrl !== lastScanUrl) {
           qrCode.innerHTML = "";
           new window.QRCode(qrCode, {
-            text: data.scanUrl,
+            text: scanUrl,
             width: 520,
             height: 520,
             colorDark: "#10231f",
@@ -202,6 +204,7 @@
             correctLevel: window.QRCode.CorrectLevel.M
           });
           lastToken = data.token;
+          lastScanUrl = scanUrl;
         }
 
         displayStatus.textContent = "스캔 후 근무 위치와 이름을 선택하고 출근 또는 퇴근을 누르세요.";
@@ -220,6 +223,14 @@
       } finally {
         renderInFlight = false;
       }
+    }
+
+    function withAppVersion(scanUrl) {
+      const version = String((window.ATTENDANCE_CONFIG || {}).version || "").trim();
+      if (!version) return scanUrl;
+      const url = new URL(scanUrl, window.location.href);
+      url.searchParams.set("appv", version);
+      return url.toString();
     }
 
     function buildDefaultScheduleSlots() {
