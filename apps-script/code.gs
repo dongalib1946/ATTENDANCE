@@ -23,6 +23,11 @@ const CONFIG = {
   RECENT_ATTENDANCE_CACHE_KEY: "recentAttendance:v1",
   RECENT_ATTENDANCE_CACHE_SECONDS: 1,
   RECENT_ATTENDANCE_LIMIT: 3,
+  ATTENDANCE_REQUEST_CACHE_PREFIX: "attendanceRequest:",
+  ATTENDANCE_REQUEST_CACHE_SECONDS: 300,
+  ATTENDANCE_LOCK_WAIT_MS: 30000,
+  DUPLICATE_ATTENDANCE_WINDOW_SECONDS: 120,
+  DUPLICATE_ATTENDANCE_LOOKBACK_ROWS: 80,
   SCHEDULE_WEEKDAYS: ["월", "화", "수", "목", "금"],
   SCHEDULE_TIME_LABELS: ["1타임", "2타임", "3타임"]
 };
@@ -339,6 +344,7 @@ function logAttendance_(params) {
   const floor = normalizeFloor_(params.floor || "");
   const name = String(params.name || "").trim();
   const kind = String(params.kind || "").trim();
+  const requestId = normalizeRequestId_(params.requestId);
 
   if (!floor) throw new Error("근무 위치를 선택해 주세요.");
   if (!name) throw new Error("이름을 선택해 주세요.");
@@ -352,17 +358,140 @@ function logAttendance_(params) {
     throw new Error("학생명부에 없는 이름 또는 근무 위치입니다.");
   }
 
-  const ss = getSpreadsheet_();
-  const sheet = getOrCreateSheet_(ss, CONFIG.ATTENDANCE_SHEET_NAME);
-  if (sheet.getLastRow() === 0) sheet.appendRow(["이름", "시간", "구분", "층"]);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(CONFIG.ATTENDANCE_LOCK_WAIT_MS)) {
+    throw new Error("기록 요청이 처리 중입니다. 잠시 후 다시 확인해 주세요.");
+  }
 
-  const now = new Date();
-  const recordedAt = Utilities.formatDate(now, getTimezone_(), "yyyy-MM-dd HH:mm:ss");
-  const kindLabel = kind === "in" ? "출근" : "퇴근";
-  sheet.appendRow([name, recordedAt, kindLabel, floor]);
-  clearRecentAttendanceCache_();
+  try {
+    const cached = getCachedAttendanceRequest_(requestId);
+    if (cached) return cached;
 
-  return { ok: true, floor, name, kindLabel, recordedAt };
+    const ss = getSpreadsheet_();
+    const sheet = getOrCreateSheet_(ss, CONFIG.ATTENDANCE_SHEET_NAME);
+    if (sheet.getLastRow() === 0) sheet.appendRow(["이름", "시간", "구분", "층"]);
+
+    const now = new Date();
+    const recordedAt = Utilities.formatDate(now, getTimezone_(), "yyyy-MM-dd HH:mm:ss");
+    const kindLabel = kind === "in" ? "출근" : "퇴근";
+    const duplicate = findRecentDuplicateAttendance_(sheet, {
+      floor: floor,
+      name: name,
+      kindLabel: kindLabel,
+      recordedAt: recordedAt
+    });
+
+    if (duplicate) {
+      const duplicatePayload = {
+        ok: true,
+        floor: floor,
+        name: name,
+        kindLabel: kindLabel,
+        recordedAt: duplicate.recordedAt,
+        duplicate: true
+      };
+      cacheAttendanceRequest_(requestId, duplicatePayload);
+      return duplicatePayload;
+    }
+
+    sheet.appendRow([name, recordedAt, kindLabel, floor]);
+    clearRecentAttendanceCache_();
+
+    const payload = { ok: true, floor, name, kindLabel, recordedAt };
+    cacheAttendanceRequest_(requestId, payload);
+    return payload;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function findRecentDuplicateAttendance_(sheet, entry) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const rowCount = Math.min(CONFIG.DUPLICATE_ATTENDANCE_LOOKBACK_ROWS, lastRow - 1);
+  const startRow = lastRow - rowCount + 1;
+  const values = sheet
+    .getRange(startRow, 1, rowCount, Math.max(4, sheet.getLastColumn()))
+    .getValues();
+  const nowMs = parseAttendanceTimestamp_(entry.recordedAt);
+  const windowMs = CONFIG.DUPLICATE_ATTENDANCE_WINDOW_SECONDS * 1000;
+
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const row = values[index];
+    const rowName = String(row[0] || "").trim();
+    const rowKind = String(row[2] || "").trim();
+    const rowFloor = normalizeFloor_(row[3]);
+    if (rowName !== entry.name || rowKind !== entry.kindLabel || rowFloor !== entry.floor) continue;
+
+    const recordedAt = formatAttendanceTimestamp_(row[1]);
+    const rowMs = parseAttendanceTimestamp_(recordedAt);
+    if (!rowMs || !nowMs) continue;
+
+    const ageMs = nowMs - rowMs;
+    if (ageMs >= 0 && ageMs <= windowMs) {
+      return { recordedAt: recordedAt };
+    }
+  }
+
+  return null;
+}
+
+function formatAttendanceTimestamp_(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, getTimezone_(), "yyyy-MM-dd HH:mm:ss");
+  }
+  return String(value || "").trim();
+}
+
+function parseAttendanceTimestamp_(value) {
+  const text = formatAttendanceTimestamp_(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(text);
+  if (!match) return 0;
+
+  return Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6])
+  );
+}
+
+function normalizeRequestId_(value) {
+  const text = String(value || "").trim();
+  return /^[0-9A-Za-z_-]{12,80}$/.test(text) ? text : "";
+}
+
+function getCachedAttendanceRequest_(requestId) {
+  if (!requestId) return null;
+
+  const cached = CacheService
+    .getScriptCache()
+    .get(CONFIG.ATTENDANCE_REQUEST_CACHE_PREFIX + requestId);
+  if (!cached) return null;
+
+  try {
+    return JSON.parse(cached);
+  } catch (error) {
+    CacheService
+      .getScriptCache()
+      .remove(CONFIG.ATTENDANCE_REQUEST_CACHE_PREFIX + requestId);
+    return null;
+  }
+}
+
+function cacheAttendanceRequest_(requestId, payload) {
+  if (!requestId) return;
+
+  CacheService
+    .getScriptCache()
+    .put(
+      CONFIG.ATTENDANCE_REQUEST_CACHE_PREFIX + requestId,
+      JSON.stringify(payload),
+      CONFIG.ATTENDANCE_REQUEST_CACHE_SECONDS
+    );
 }
 
 function getRecentAttendancePayload_(forceRefresh) {

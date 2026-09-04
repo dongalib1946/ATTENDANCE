@@ -60,7 +60,8 @@ exports.handler = async function handler(event) {
         action: "log",
         floor: body.floor,
         name: body.name,
-        kind: body.kind
+        kind: body.kind,
+        requestId: body.requestId
       }, { timeoutMs: 15000 });
       if (result.ok) {
         recentLogsCache = { payload: null, expiresAt: 0 };

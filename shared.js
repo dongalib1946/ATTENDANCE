@@ -9,7 +9,7 @@
     settings: { timeoutMs: 8000, retries: 1 },
     adminStatus: { timeoutMs: 12000, retries: 1 },
     updateSettings: { timeoutMs: 12000, retries: 1 },
-    log: { timeoutMs: 18000, retries: 0 }
+    log: { timeoutMs: 30000, retries: 0 }
   };
 
   async function call(action, params = {}, options = {}) {

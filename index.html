@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 출퇴근 기록</title>
-  <link rel="stylesheet" href="./styles.css?v=20260903-cache-bump-3">
+  <link rel="stylesheet" href="./styles.css?v=20260904-dedupe-1">
 </head>
 <body>
   <main class="app-shell">
@@ -58,8 +58,8 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260903-cache-bump-3"></script>
-  <script src="./shared.js?v=20260903-cache-bump-3"></script>
+  <script src="./config.js?v=20260904-dedupe-1"></script>
+  <script src="./shared.js?v=20260904-dedupe-1"></script>
   <script>
     const token = new URLSearchParams(location.search).get("token") || "";
     const floorPicker = document.getElementById("floorPicker");
@@ -78,16 +78,18 @@
     let students = [];
     let selectedFloor = localStorage.getItem("attendance:lastFloor") || "";
     let isActionCooldownActive = false;
+    let isAttendanceRequestActive = false;
     let actionCooldownTimer = null;
 
     function setReadyState(isReady) {
       floorPicker.disabled = !isReady;
       studentSelect.disabled = !isReady || !selectedFloor;
-      const canSubmit = isReady && Boolean(studentSelect.value);
+      const canSubmit = isReady && Boolean(studentSelect.value) && !isActionCooldownActive && !isAttendanceRequestActive;
       clockInButton.disabled = !canSubmit;
       clockOutButton.disabled = !canSubmit;
-      clockInButton.setAttribute("aria-disabled", String(isActionCooldownActive && canSubmit));
-      clockOutButton.setAttribute("aria-disabled", String(isActionCooldownActive && canSubmit));
+      const isSubmitBlocked = isReady && Boolean(studentSelect.value) && (isActionCooldownActive || isAttendanceRequestActive);
+      clockInButton.setAttribute("aria-disabled", String(isSubmitBlocked));
+      clockOutButton.setAttribute("aria-disabled", String(isSubmitBlocked));
       connectionStatus.classList.toggle("ready", isReady);
     }
 
@@ -115,6 +117,17 @@
         isActionCooldownActive = false;
         setReadyState(true);
       }, actionCooldownMs);
+    }
+
+    function createRequestId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+      }
+      return [
+        Date.now().toString(36),
+        Math.random().toString(36).slice(2),
+        Math.random().toString(36).slice(2)
+      ].join("-");
     }
 
     function normalizeStudent(student) {
@@ -213,26 +226,34 @@
         return;
       }
 
+      isAttendanceRequestActive = true;
       setReadyState(false);
       setLoading(true, "기록 중입니다");
       setResult("기록 중입니다...", "");
+      startActionCooldown();
 
       try {
-        const data = await AttendanceApi.call("log", { floor: selectedFloor, name, kind, token });
+        const requestId = createRequestId();
+        const data = await AttendanceApi.call("log", { floor: selectedFloor, name, kind, token, requestId });
         if (!data.ok) throw new Error(data.message || "기록에 실패했습니다.");
 
         localStorage.setItem("attendance:lastFloor", selectedFloor);
         localStorage.setItem("attendance:lastName", name);
         const kindLabel = data.kindLabel || (kind === "in" ? "출근" : "퇴근");
-        setResult(`${selectedFloor} ${name}님의 ${kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`, "success");
-        const completionMessage = `${kindLabel}을 완료했습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.`;
+        const resultMessage = data.duplicate
+          ? `${selectedFloor} ${name}님의 ${kindLabel} 기록은 이미 저장되어 있습니다. (${data.recordedAt})`
+          : `${selectedFloor} ${name}님의 ${kindLabel} 기록이 저장되었습니다. (${data.recordedAt})`;
+        setResult(resultMessage, "success");
+        const completionMessage = data.duplicate
+          ? `${kindLabel} 기록이 이미 저장되어 있어 추가 기록하지 않았습니다.`
+          : `${kindLabel}을 완료했습니다. 모니터 화면에는 일시적인 지연이 있을 수 있습니다.`;
         tokenNotice.textContent = completionMessage;
         setLoading(false);
-        startActionCooldown();
         alert(completionMessage);
       } catch (error) {
         setResult(error.message, "error");
       } finally {
+        isAttendanceRequestActive = false;
         setLoading(false);
         setReadyState(true);
       }
