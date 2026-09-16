@@ -7,16 +7,17 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260904-dedupe-1">
+  <link rel="stylesheet" href="./styles.css?v=20260916-manual-1">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260904-dedupe-1" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-1" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
       <div class="system-masthead" aria-label="시스템 이름">
         <span>동아대학교 도서관</span>
         <strong>근로장학생<br>출퇴근 시스템</strong>
+        <button class="manual-attendance-button" id="manualAttendanceButton" type="button">수동 출퇴근</button>
       </div>
       <div class="clock-block" aria-label="현재 날짜와 시간">
         <time class="display-time" id="displayTime">--:--:--</time>
@@ -78,9 +79,26 @@
     </section>
   </main>
 
-  <script src="./config.js?v=20260904-dedupe-1"></script>
+  <section class="manual-modal-backdrop" id="manualAttendanceModal" aria-hidden="true" hidden>
+    <div class="manual-modal" role="dialog" aria-modal="true" aria-labelledby="manualAttendanceTitle">
+      <header class="manual-modal-header">
+        <div>
+          <span>관리자 직접 처리</span>
+          <strong id="manualAttendanceTitle">수동 출퇴근</strong>
+        </div>
+        <div class="manual-modal-actions">
+          <button class="manual-refresh-button" id="manualRefreshButton" type="button">새로고침</button>
+          <button class="manual-close-button" id="manualCloseButton" type="button" aria-label="수동 출퇴근 닫기">닫기</button>
+        </div>
+      </header>
+      <p class="manual-modal-status" id="manualAttendanceStatus" role="status" aria-live="polite">명단을 불러오는 중입니다.</p>
+      <div class="manual-roster-groups" id="manualRosterGroups"></div>
+    </div>
+  </section>
+
+  <script src="./config.js?v=20260916-manual-1"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260904-dedupe-1"></script>
+  <script src="./shared.js?v=20260916-manual-1"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -96,6 +114,12 @@
     const recentList = document.getElementById("recentList");
     const recentUpdated = document.getElementById("recentUpdated");
     const recentSoundButton = document.getElementById("recentSoundButton");
+    const manualAttendanceButton = document.getElementById("manualAttendanceButton");
+    const manualAttendanceModal = document.getElementById("manualAttendanceModal");
+    const manualCloseButton = document.getElementById("manualCloseButton");
+    const manualRefreshButton = document.getElementById("manualRefreshButton");
+    const manualAttendanceStatus = document.getElementById("manualAttendanceStatus");
+    const manualRosterGroups = document.getElementById("manualRosterGroups");
     let lastToken = "";
     let lastScanUrl = "";
     let renderInFlight = false;
@@ -110,6 +134,10 @@
     let qrLibraryPromise = null;
     let recentSoundEnabled = false;
     let recentSoundContext = null;
+    let manualRoster = [];
+    let manualRosterLoaded = false;
+    let manualRosterInFlight = false;
+    let manualLogInFlight = false;
 
     function updateClock() {
       const now = new Date();
@@ -231,6 +259,202 @@
       const url = new URL(scanUrl, window.location.href);
       url.searchParams.set("appv", version);
       return url.toString();
+    }
+
+    function createManualRequestId() {
+      const random = new Uint32Array(4);
+      if (window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(random);
+      } else {
+        random.forEach((_, index) => {
+          random[index] = Math.floor(Math.random() * 0xffffffff);
+        });
+      }
+      return Array.from(random, (value) => value.toString(36)).join("-") + "-" + Date.now().toString(36);
+    }
+
+    function waitForManualToken(timeoutMs) {
+      return new Promise((resolve) => {
+        const startedAt = Date.now();
+        const check = () => {
+          if (lastToken) {
+            resolve(lastToken);
+          } else if (Date.now() - startedAt >= timeoutMs) {
+            resolve("");
+          } else {
+            setTimeout(check, 150);
+          }
+        };
+        check();
+      });
+    }
+
+    async function ensureManualToken() {
+      if (lastToken) return lastToken;
+      if (!renderInFlight) await renderQr();
+      const token = lastToken || await waitForManualToken(8000);
+      if (token) return token;
+      throw new Error("QR 연결 후 수동 출퇴근을 사용할 수 있습니다.");
+    }
+
+    function setManualStatus(text, type) {
+      manualAttendanceStatus.textContent = text || "";
+      manualAttendanceStatus.dataset.type = type || "";
+    }
+
+    function setManualBusy(isBusy) {
+      manualRefreshButton.disabled = isBusy;
+      manualRosterGroups.querySelectorAll("button").forEach((button) => {
+        button.disabled = isBusy;
+      });
+    }
+
+    function groupManualRoster(students) {
+      const groups = {
+        "4층": [],
+        "5층": [],
+        "기타": []
+      };
+
+      students.forEach((student) => {
+        const floor = String(student.floor || "").trim();
+        if (floor === "4층" || floor === "5층") {
+          groups[floor].push(student);
+        } else {
+          groups["기타"].push(student);
+        }
+      });
+
+      return groups;
+    }
+
+    function renderManualRoster() {
+      manualRosterGroups.innerHTML = "";
+      const groups = groupManualRoster(manualRoster);
+      const orderedFloors = ["4층", "5층", "기타"].filter((floor) => groups[floor].length);
+
+      if (!orderedFloors.length) {
+        const empty = document.createElement("div");
+        empty.className = "manual-empty";
+        empty.textContent = "표시할 학생 명단이 없습니다.";
+        manualRosterGroups.appendChild(empty);
+        return;
+      }
+
+      orderedFloors.forEach((floor) => {
+        const section = document.createElement("section");
+        section.className = "manual-roster-section";
+
+        const heading = document.createElement("h2");
+        heading.textContent = `${floor} ${groups[floor].length}명`;
+
+        const list = document.createElement("div");
+        list.className = "manual-student-list";
+
+        groups[floor].forEach((student) => {
+          const row = document.createElement("article");
+          row.className = "manual-student-row";
+
+          const name = document.createElement("strong");
+          name.textContent = student.name || "-";
+
+          const actions = document.createElement("div");
+          actions.className = "manual-student-actions";
+
+          const inButton = document.createElement("button");
+          inButton.className = "manual-log-button in";
+          inButton.type = "button";
+          inButton.textContent = "출근";
+          inButton.addEventListener("click", () => submitManualAttendance(student, "in"));
+
+          const outButton = document.createElement("button");
+          outButton.className = "manual-log-button out";
+          outButton.type = "button";
+          outButton.textContent = "퇴근";
+          outButton.addEventListener("click", () => submitManualAttendance(student, "out"));
+
+          actions.append(inButton, outButton);
+          row.append(name, actions);
+          list.appendChild(row);
+        });
+
+        section.append(heading, list);
+        manualRosterGroups.appendChild(section);
+      });
+    }
+
+    async function loadManualRoster(options = {}) {
+      if (manualRosterInFlight) return;
+      manualRosterInFlight = true;
+      manualRefreshButton.disabled = true;
+      if (!manualRosterLoaded || options.force) {
+        setManualStatus("구글시트 학생명부를 불러오는 중입니다.", "");
+      }
+
+      try {
+        const token = await ensureManualToken();
+        const data = await AttendanceApi.call("roster", { token });
+        if (!data.ok) throw new Error(data.message || "학생명부를 불러오지 못했습니다.");
+        manualRoster = Array.isArray(data.students) ? data.students : [];
+        manualRosterLoaded = true;
+        renderManualRoster();
+        setManualStatus(`학생 ${manualRoster.length}명을 불러왔습니다.`, "success");
+      } catch (error) {
+        setManualStatus(error.message, "error");
+        if (!manualRosterLoaded) {
+          manualRosterGroups.innerHTML = '<div class="manual-empty">명단을 불러오지 못했습니다.</div>';
+        }
+      } finally {
+        manualRosterInFlight = false;
+        manualRefreshButton.disabled = false;
+      }
+    }
+
+    async function submitManualAttendance(student, kind) {
+      if (manualLogInFlight) return;
+      manualLogInFlight = true;
+      setManualBusy(true);
+
+      const kindLabel = kind === "in" ? "출근" : "퇴근";
+      const name = student.name || "";
+      setManualStatus(`${name} ${kindLabel}을 기록하는 중입니다.`, "");
+
+      try {
+        const token = await ensureManualToken();
+        const data = await AttendanceApi.call("log", {
+          floor: student.floor || "",
+          name,
+          kind,
+          token,
+          requestId: createManualRequestId()
+        });
+        if (!data.ok) throw new Error(data.message || "출퇴근 기록에 실패했습니다.");
+
+        const recordedAt = data.recordedAt ? ` (${data.recordedAt})` : "";
+        const duplicateText = data.duplicate ? "이미 처리된 최근 기록입니다." : "구글시트에 기록했습니다.";
+        setManualStatus(`${data.name || name} ${data.kindLabel || kindLabel}${recordedAt} - ${duplicateText}`, "success");
+        loadRecentLogs({ force: true });
+      } catch (error) {
+        setManualStatus(error.message, "error");
+      } finally {
+        manualLogInFlight = false;
+        setManualBusy(false);
+      }
+    }
+
+    function openManualAttendanceModal() {
+      manualAttendanceModal.hidden = false;
+      manualAttendanceModal.setAttribute("aria-hidden", "false");
+      manualCloseButton.focus();
+      if (!manualRosterLoaded) {
+        loadManualRoster({ force: true });
+      }
+    }
+
+    function closeManualAttendanceModal() {
+      manualAttendanceModal.hidden = true;
+      manualAttendanceModal.setAttribute("aria-hidden", "true");
+      manualAttendanceButton.focus();
     }
 
     function buildDefaultScheduleSlots() {
@@ -475,6 +699,15 @@
     loadRecentLogs({ force: true });
     recentSoundButton.addEventListener("click", enableRecentLogSound);
     scheduleRefreshButton.addEventListener("click", () => loadSchedule({ force: true, manual: true }));
+    manualAttendanceButton.addEventListener("click", openManualAttendanceModal);
+    manualCloseButton.addEventListener("click", closeManualAttendanceModal);
+    manualRefreshButton.addEventListener("click", () => loadManualRoster({ force: true }));
+    manualAttendanceModal.addEventListener("click", (event) => {
+      if (event.target === manualAttendanceModal) closeManualAttendanceModal();
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !manualAttendanceModal.hidden) closeManualAttendanceModal();
+    });
     setInterval(renderQr, 30000);
     setInterval(loadSchedule, 60 * 1000);
     setInterval(loadRecentLogs, 2 * 1000);
