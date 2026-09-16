@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260916-manual-3">
+  <link rel="stylesheet" href="./styles.css?v=20260916-manual-4">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-3" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-4" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -97,9 +97,9 @@
     </div>
   </section>
 
-  <script src="./config.js?v=20260916-manual-3"></script>
+  <script src="./config.js?v=20260916-manual-4"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260916-manual-3"></script>
+  <script src="./shared.js?v=20260916-manual-4"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -143,6 +143,7 @@
     let manualSelectedFloor = "4층";
     let manualIdleTimer = 0;
     const MANUAL_IDLE_TIMEOUT_MS = 20000;
+    const MANUAL_LOG_RESPONSE_WAIT_MS = 12000;
 
     function updateClock() {
       const now = new Date();
@@ -322,6 +323,11 @@
       }
     }
 
+    function isManualSubmitDelayError(error) {
+      const message = String(error && error.message || "");
+      return message.indexOf("지연") !== -1 || message.indexOf("연결") !== -1;
+    }
+
     function isManualBusy() {
       return manualRosterInFlight || manualLogInFlight;
     }
@@ -481,7 +487,7 @@
           kind,
           token,
           requestId: createManualRequestId()
-        });
+        }, { timeoutMs: MANUAL_LOG_RESPONSE_WAIT_MS });
         if (!data.ok) throw new Error(data.message || "출퇴근 기록에 실패했습니다.");
 
         const recordedAt = data.recordedAt ? ` (${data.recordedAt})` : "";
@@ -490,7 +496,13 @@
         setManualStatus(data.duplicate ? `${statusText} - ${duplicateText}` : statusText, "success");
         loadRecentLogs({ force: true });
       } catch (error) {
-        setManualStatus(error.message, "error");
+        if (isManualSubmitDelayError(error)) {
+          setManualStatus(`${name} ${kindLabel} 요청을 보냈습니다. 최근 출퇴근 내역에서 확인해 주세요.`, "success");
+          loadRecentLogs({ force: true });
+          window.setTimeout(() => loadRecentLogs({ force: true }), 3000);
+        } else {
+          setManualStatus(error.message, "error");
+        }
       } finally {
         manualLogInFlight = false;
         setManualBusy(false);
