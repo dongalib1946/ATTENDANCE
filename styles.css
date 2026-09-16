@@ -953,7 +953,7 @@ select:focus {
   width: min(1180px, 96vw);
   max-height: min(880px, 92vh);
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
@@ -1038,10 +1038,60 @@ select:focus {
   color: var(--red);
 }
 
+.manual-floor-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 18px 0;
+  background: #f8fafb;
+}
+
+.manual-floor-chip {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px;
+  border: 1px solid #cbd7d3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #29423c;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.manual-floor-chip strong {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.manual-floor-chip span {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.manual-floor-chip.active {
+  border-color: var(--green);
+  background: #e8f5f0;
+  color: var(--green-strong);
+  box-shadow: inset 0 0 0 2px var(--green), 0 14px 30px rgba(4, 120, 87, 0.14);
+}
+
+.manual-floor-chip.active span {
+  color: var(--green-strong);
+}
+
+.manual-floor-chip:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .manual-roster-groups {
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   overflow: auto;
   padding: 18px;
@@ -1063,6 +1113,7 @@ select:focus {
 
 .manual-student-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
   gap: 10px;
 }
 
@@ -1479,7 +1530,28 @@ select:focus {
     padding: 14px;
   }
 
+  .manual-floor-tabs {
+    padding: 14px 14px 0;
+  }
+
+  .manual-floor-chip {
+    min-height: 58px;
+    padding: 0 14px;
+  }
+
+  .manual-floor-chip strong {
+    font-size: 22px;
+  }
+
+  .manual-floor-chip span {
+    font-size: 15px;
+  }
+
   .manual-student-row {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-student-list {
     grid-template-columns: 1fr;
   }
 

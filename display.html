@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260916-manual-1">
+  <link rel="stylesheet" href="./styles.css?v=20260916-manual-2">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-1" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-2" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -92,13 +92,14 @@
         </div>
       </header>
       <p class="manual-modal-status" id="manualAttendanceStatus" role="status" aria-live="polite">명단을 불러오는 중입니다.</p>
+      <div class="manual-floor-tabs" id="manualFloorTabs" aria-label="층 선택"></div>
       <div class="manual-roster-groups" id="manualRosterGroups"></div>
     </div>
   </section>
 
-  <script src="./config.js?v=20260916-manual-1"></script>
+  <script src="./config.js?v=20260916-manual-2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260916-manual-1"></script>
+  <script src="./shared.js?v=20260916-manual-2"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -119,6 +120,7 @@
     const manualCloseButton = document.getElementById("manualCloseButton");
     const manualRefreshButton = document.getElementById("manualRefreshButton");
     const manualAttendanceStatus = document.getElementById("manualAttendanceStatus");
+    const manualFloorTabs = document.getElementById("manualFloorTabs");
     const manualRosterGroups = document.getElementById("manualRosterGroups");
     let lastToken = "";
     let lastScanUrl = "";
@@ -138,6 +140,7 @@
     let manualRosterLoaded = false;
     let manualRosterInFlight = false;
     let manualLogInFlight = false;
+    let manualSelectedFloor = "4층";
 
     function updateClock() {
       const now = new Date();
@@ -304,6 +307,9 @@
 
     function setManualBusy(isBusy) {
       manualRefreshButton.disabled = isBusy;
+      manualFloorTabs.querySelectorAll("button").forEach((button) => {
+        button.disabled = isBusy;
+      });
       manualRosterGroups.querySelectorAll("button").forEach((button) => {
         button.disabled = isBusy;
       });
@@ -328,59 +334,76 @@
       return groups;
     }
 
+    function renderManualFloorTabs(groups) {
+      manualFloorTabs.innerHTML = "";
+      ["4층", "5층"].forEach((floor) => {
+        const button = document.createElement("button");
+        button.className = "manual-floor-chip" + (floor === manualSelectedFloor ? " active" : "");
+        button.type = "button";
+        button.setAttribute("aria-pressed", floor === manualSelectedFloor ? "true" : "false");
+        button.innerHTML = `<strong>${floor}</strong><span>${groups[floor].length}명</span>`;
+        button.addEventListener("click", () => {
+          if (manualSelectedFloor === floor) return;
+          manualSelectedFloor = floor;
+          renderManualRoster();
+          setManualStatus(`${floor} 학생 ${groups[floor].length}명을 표시합니다.`, "success");
+        });
+        manualFloorTabs.appendChild(button);
+      });
+    }
+
     function renderManualRoster() {
       manualRosterGroups.innerHTML = "";
       const groups = groupManualRoster(manualRoster);
-      const orderedFloors = ["4층", "5층", "기타"].filter((floor) => groups[floor].length);
+      renderManualFloorTabs(groups);
+      const selectedStudents = groups[manualSelectedFloor] || [];
 
-      if (!orderedFloors.length) {
+      if (!selectedStudents.length) {
         const empty = document.createElement("div");
         empty.className = "manual-empty";
-        empty.textContent = "표시할 학생 명단이 없습니다.";
+        empty.textContent = `${manualSelectedFloor} 학생 명단이 없습니다.`;
         manualRosterGroups.appendChild(empty);
         return;
       }
 
-      orderedFloors.forEach((floor) => {
-        const section = document.createElement("section");
-        section.className = "manual-roster-section";
+      const section = document.createElement("section");
+      section.className = "manual-roster-section";
 
-        const heading = document.createElement("h2");
-        heading.textContent = `${floor} ${groups[floor].length}명`;
+      const heading = document.createElement("h2");
+      heading.textContent = `${manualSelectedFloor} 명단`;
 
-        const list = document.createElement("div");
-        list.className = "manual-student-list";
+      const list = document.createElement("div");
+      list.className = "manual-student-list";
 
-        groups[floor].forEach((student) => {
-          const row = document.createElement("article");
-          row.className = "manual-student-row";
+      selectedStudents.forEach((student) => {
+        const row = document.createElement("article");
+        row.className = "manual-student-row";
 
-          const name = document.createElement("strong");
-          name.textContent = student.name || "-";
+        const name = document.createElement("strong");
+        name.textContent = student.name || "-";
 
-          const actions = document.createElement("div");
-          actions.className = "manual-student-actions";
+        const actions = document.createElement("div");
+        actions.className = "manual-student-actions";
 
-          const inButton = document.createElement("button");
-          inButton.className = "manual-log-button in";
-          inButton.type = "button";
-          inButton.textContent = "출근";
-          inButton.addEventListener("click", () => submitManualAttendance(student, "in"));
+        const inButton = document.createElement("button");
+        inButton.className = "manual-log-button in";
+        inButton.type = "button";
+        inButton.textContent = "출근";
+        inButton.addEventListener("click", () => submitManualAttendance(student, "in"));
 
-          const outButton = document.createElement("button");
-          outButton.className = "manual-log-button out";
-          outButton.type = "button";
-          outButton.textContent = "퇴근";
-          outButton.addEventListener("click", () => submitManualAttendance(student, "out"));
+        const outButton = document.createElement("button");
+        outButton.className = "manual-log-button out";
+        outButton.type = "button";
+        outButton.textContent = "퇴근";
+        outButton.addEventListener("click", () => submitManualAttendance(student, "out"));
 
-          actions.append(inButton, outButton);
-          row.append(name, actions);
-          list.appendChild(row);
-        });
-
-        section.append(heading, list);
-        manualRosterGroups.appendChild(section);
+        actions.append(inButton, outButton);
+        row.append(name, actions);
+        list.appendChild(row);
       });
+
+      section.append(heading, list);
+      manualRosterGroups.appendChild(section);
     }
 
     async function loadManualRoster(options = {}) {
@@ -398,7 +421,8 @@
         manualRoster = Array.isArray(data.students) ? data.students : [];
         manualRosterLoaded = true;
         renderManualRoster();
-        setManualStatus(`학생 ${manualRoster.length}명을 불러왔습니다.`, "success");
+        const groups = groupManualRoster(manualRoster);
+        setManualStatus(`${manualSelectedFloor} 학생 ${groups[manualSelectedFloor].length}명을 표시합니다.`, "success");
       } catch (error) {
         setManualStatus(error.message, "error");
         if (!manualRosterLoaded) {
