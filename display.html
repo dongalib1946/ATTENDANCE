@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>근로학생 QR</title>
-  <link rel="stylesheet" href="./styles.css?v=20260916-manual-2">
+  <link rel="stylesheet" href="./styles.css?v=20260916-manual-3">
 </head>
 <body class="display-body">
-  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-2" aria-label="관리자 페이지로 이동">관리자</a>
+  <a class="admin-corner-link" href="./admin.html?v=20260916-manual-3" aria-label="관리자 페이지로 이동">관리자</a>
 
   <main class="display-shell">
     <section class="display-copy">
@@ -97,9 +97,9 @@
     </div>
   </section>
 
-  <script src="./config.js?v=20260916-manual-2"></script>
+  <script src="./config.js?v=20260916-manual-3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="./shared.js?v=20260916-manual-2"></script>
+  <script src="./shared.js?v=20260916-manual-3"></script>
   <script>
     const qrCode = document.getElementById("qrCode");
     const displayStatus = document.getElementById("displayStatus");
@@ -141,6 +141,8 @@
     let manualRosterInFlight = false;
     let manualLogInFlight = false;
     let manualSelectedFloor = "4층";
+    let manualIdleTimer = 0;
+    const MANUAL_IDLE_TIMEOUT_MS = 20000;
 
     function updateClock() {
       const now = new Date();
@@ -313,6 +315,31 @@
       manualRosterGroups.querySelectorAll("button").forEach((button) => {
         button.disabled = isBusy;
       });
+      if (isBusy) {
+        clearManualIdleTimer();
+      } else {
+        resetManualIdleTimer();
+      }
+    }
+
+    function isManualBusy() {
+      return manualRosterInFlight || manualLogInFlight;
+    }
+
+    function clearManualIdleTimer() {
+      if (!manualIdleTimer) return;
+      window.clearTimeout(manualIdleTimer);
+      manualIdleTimer = 0;
+    }
+
+    function resetManualIdleTimer() {
+      clearManualIdleTimer();
+      if (manualAttendanceModal.hidden || isManualBusy()) return;
+      manualIdleTimer = window.setTimeout(() => {
+        if (!manualAttendanceModal.hidden && !isManualBusy()) {
+          closeManualAttendanceModal();
+        }
+      }, MANUAL_IDLE_TIMEOUT_MS);
     }
 
     function groupManualRoster(students) {
@@ -343,6 +370,7 @@
         button.setAttribute("aria-pressed", floor === manualSelectedFloor ? "true" : "false");
         button.innerHTML = `<strong>${floor}</strong><span>${groups[floor].length}명</span>`;
         button.addEventListener("click", () => {
+          resetManualIdleTimer();
           if (manualSelectedFloor === floor) return;
           manualSelectedFloor = floor;
           renderManualRoster();
@@ -409,6 +437,7 @@
     async function loadManualRoster(options = {}) {
       if (manualRosterInFlight) return;
       manualRosterInFlight = true;
+      clearManualIdleTimer();
       manualRefreshButton.disabled = true;
       if (!manualRosterLoaded || options.force) {
         setManualStatus("구글시트 학생명부를 불러오는 중입니다.", "");
@@ -431,6 +460,7 @@
       } finally {
         manualRosterInFlight = false;
         manualRefreshButton.disabled = false;
+        resetManualIdleTimer();
       }
     }
 
@@ -455,8 +485,9 @@
         if (!data.ok) throw new Error(data.message || "출퇴근 기록에 실패했습니다.");
 
         const recordedAt = data.recordedAt ? ` (${data.recordedAt})` : "";
-        const duplicateText = data.duplicate ? "이미 처리된 최근 기록입니다." : "구글시트에 기록했습니다.";
-        setManualStatus(`${data.name || name} ${data.kindLabel || kindLabel}${recordedAt} - ${duplicateText}`, "success");
+        const statusText = `${data.name || name} ${data.kindLabel || kindLabel}${recordedAt}`;
+        const duplicateText = "최근 같은 기록이 있어 추가 기록하지 않았습니다.";
+        setManualStatus(data.duplicate ? `${statusText} - ${duplicateText}` : statusText, "success");
         loadRecentLogs({ force: true });
       } catch (error) {
         setManualStatus(error.message, "error");
@@ -472,10 +503,13 @@
       manualCloseButton.focus();
       if (!manualRosterLoaded) {
         loadManualRoster({ force: true });
+      } else {
+        resetManualIdleTimer();
       }
     }
 
     function closeManualAttendanceModal() {
+      clearManualIdleTimer();
       manualAttendanceModal.hidden = true;
       manualAttendanceModal.setAttribute("aria-hidden", "true");
       manualAttendanceButton.focus();
@@ -726,6 +760,8 @@
     manualAttendanceButton.addEventListener("click", openManualAttendanceModal);
     manualCloseButton.addEventListener("click", closeManualAttendanceModal);
     manualRefreshButton.addEventListener("click", () => loadManualRoster({ force: true }));
+    manualAttendanceModal.addEventListener("pointerdown", resetManualIdleTimer);
+    manualAttendanceModal.addEventListener("keydown", resetManualIdleTimer);
     manualAttendanceModal.addEventListener("click", (event) => {
       if (event.target === manualAttendanceModal) closeManualAttendanceModal();
     });
